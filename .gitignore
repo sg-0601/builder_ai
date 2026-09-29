@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.tmp
+brreg-enheter.csv
+signalpost-universe.jsonl.gz

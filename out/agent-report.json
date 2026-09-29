@@ -1,0 +1,45 @@
+{
+  "run_id": "agent-test-01",
+  "started_at": "2026-09-29T14:38:16.926153Z",
+  "completed_at": "2026-09-29T14:38:36.472951Z",
+  "total_elapsed_ms": 19546,
+  "expected_count": 10,
+  "emitted_envelopes": 10,
+  "resumed_profiles": 0,
+  "profiles_fetched_this_run": 10,
+  "modules": [
+    "registry",
+    "accounting_obligation",
+    "registry_live",
+    "financials",
+    "roles",
+    "group",
+    "locations",
+    "website"
+  ],
+  "registry": {
+    "registry_snapshot_sha256": "b82d6a3e7231d1759a958c282bc4366b80ec2fab8095053d8ed7fa9cd01bc838",
+    "registry_rows_scanned": 403672,
+    "requested": 10,
+    "selected": 10
+  },
+  "operations": {
+    "requests": 66,
+    "bytes": 82228,
+    "p50_ms": 1480,
+    "p95_ms": 2655,
+    "total_elapsed_ms": 19546,
+    "third_party_cost_usd": 0.0
+  },
+  "validation": {
+    "passed": true,
+    "checks": {
+      "exact_expected_count": true,
+      "unique_organisation_numbers": true,
+      "all_entity_states_terminal": true,
+      "all_module_states_terminal": true,
+      "zero_silent_drops": true
+    },
+    "invalid_states": []
+  }
+}
