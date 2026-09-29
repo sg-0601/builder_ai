@@ -5,3 +5,6 @@ __pycache__/
 *.tmp
 brreg-enheter.csv
 signalpost-universe.jsonl.gz
+.env
+*.env
+

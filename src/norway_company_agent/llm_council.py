@@ -26,11 +26,18 @@ class CouncilMember:
         self.env_key = env_key
         self.model_name = model_name
 
+    def _resolve_key(self) -> str:
+        if not self.env_key:
+            return ""
+        key = os.getenv(self.env_key, "").strip()
+        if not key and self.provider == "huggingface":
+            key = (os.getenv("HUGGINGFACE_TOKEN", "") or os.getenv("HF_TOKEN", "") or os.getenv("HUGGINGFACE_API_KEY", "")).strip()
+        return key
+
     def has_active_key(self) -> bool:
         if not self.env_key:
             return True
-        key = os.getenv(self.env_key, "").strip()
-        return bool(key)
+        return bool(self._resolve_key())
 
     def evaluate(self, profile: dict[str, Any], timeout: float = 8.0) -> dict[str, Any]:
         """
@@ -53,7 +60,7 @@ class CouncilMember:
         website = evidence.get("website", {}).get("value") or {}
 
         # If live API key is present, attempt live HTTP call
-        api_key = os.getenv(self.env_key, "").strip() if self.env_key else ""
+        api_key = self._resolve_key()
         if api_key:
             try:
                 live_res = self._call_live_llm(name, org, fin, roles, loc, footprint, website, api_key, timeout)
@@ -92,11 +99,13 @@ class CouncilMember:
             f"If data is absent in the evidence pool, mark it as 'confirmed_absent'. Never guess or extrapolate."
         )
 
+        ua_headers = {"User-Agent": "SignalpostResearch/1.0 (+https://builderr.ai)"}
+
         # 1. Google Gemini
         if self.provider == "gemini":
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:generateContent?key={api_key}"
             req_data = json.dumps({"contents": [{"parts": [{"text": prompt}]}]}).encode("utf-8")
-            req = urllib.request.Request(url, data=req_data, headers={"Content-Type": "application/json"})
+            req = urllib.request.Request(url, data=req_data, headers={"Content-Type": "application/json", **ua_headers})
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
                 text = data["candidates"][0]["content"]["parts"][0]["text"]
@@ -120,7 +129,7 @@ class CouncilMember:
             req = urllib.request.Request(
                 url,
                 data=req_data,
-                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", **ua_headers},
             )
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
@@ -142,6 +151,7 @@ class CouncilMember:
                     "x-api-key": api_key,
                     "anthropic-version": "2023-06-01",
                     "Content-Type": "application/json",
+                    **ua_headers,
                 },
             )
             with urllib.request.urlopen(req, timeout=timeout) as resp:
@@ -160,7 +170,7 @@ class CouncilMember:
             req = urllib.request.Request(
                 url,
                 data=req_data,
-                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", **ua_headers},
             )
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
@@ -174,7 +184,7 @@ class CouncilMember:
             req = urllib.request.Request(
                 url,
                 data=req_data,
-                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", **ua_headers},
             )
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
@@ -254,15 +264,15 @@ class LLMCouncil:
     def __init__(self):
         self.members = [
             CouncilMember("Google Gemini 1.5 Flash", "gemini", "free_tier", "GEMINI_API_KEY", "gemini-1.5-flash"),
+            CouncilMember("Groq Llama 3.3 70B", "groq", "free_tier", "GROQ_API_KEY", "llama-3.3-70b-versatile"),
+            CouncilMember("Hugging Face Qwen 2.5", "huggingface", "free_tier", "HUGGINGFACE_TOKEN", "Qwen/Qwen2.5-72B-Instruct"),
+            CouncilMember("Local NorBERT Neural Arbiter", "local_norbert", "local_neural", None, "NOSIBLE/financial-sentiment-v1.2-base"),
             CouncilMember("Anthropic Claude 3.5 Sonnet", "claude", "paid_tier", "ANTHROPIC_API_KEY", "claude-3-5-haiku-20241022"),
             CouncilMember("OpenAI GPT-4o-mini", "openai", "paid_tier", "OPENAI_API_KEY", "gpt-4o-mini"),
-            CouncilMember("Groq Llama 3.3 70B", "groq", "free_tier", "GROQ_API_KEY", "llama-3.3-70b-versatile"),
-            CouncilMember("Mistral Small AI", "mistral", "free_tier", "MISTRAL_API_KEY", "mistral-small-latest"),
+            CouncilMember("Mistral Small AI", "mistral", "paid_tier", "MISTRAL_API_KEY", "mistral-small-latest"),
             CouncilMember("Perplexity Sonar", "perplexity", "paid_tier", "PERPLEXITY_API_KEY", "sonar"),
             CouncilMember("Cohere Command R+", "cohere", "paid_tier", "COHERE_API_KEY", "command-r-plus-08-2024"),
             CouncilMember("DeepSeek V3", "deepseek", "paid_tier", "DEEPSEEK_API_KEY", "deepseek-chat"),
-            CouncilMember("Hugging Face Qwen 2.5", "huggingface", "free_tier", "HUGGINGFACE_API_KEY", "Qwen/Qwen2.5-72B-Instruct"),
-            CouncilMember("Local NorBERT Neural Arbiter", "local_norbert", "local_neural", None, "NOSIBLE/financial-sentiment-v1.2-base"),
         ]
 
     def evaluate_council(self, profile: dict[str, Any]) -> dict[str, Any]:
