@@ -301,15 +301,50 @@ def fetch_google_places(profile: dict[str, Any], api_key: str | None = None, tim
     cost = 0.017  # $17.00 per 1,000 queries
 
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": UA_HEADER})
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            data = json.loads(resp.read().decode("utf-8", errors="replace"))
+        # Try modern Google Places API (New) first (preferred by modern Google Cloud keys)
+        place = None
+        url_new = "https://places.googleapis.com/v1/places:searchText"
+        payload_new = json.dumps({"textQuery": f"{name} {muni} Norway"}).encode("utf-8")
+        req_new = urllib.request.Request(
+            url_new,
+            data=payload_new,
+            headers={
+                "Content-Type": "application/json",
+                "X-Goog-Api-Key": api_key,
+                "X-Goog-FieldMask": "places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.id",
+                "User-Agent": UA_HEADER,
+            },
+        )
+        try:
+            with urllib.request.urlopen(req_new, timeout=timeout) as resp:
+                data_new = json.loads(resp.read().decode("utf-8", errors="replace"))
+            new_places = data_new.get("places", [])
+            if new_places:
+                top = new_places[0]
+                place = {
+                    "place_id": top.get("id"),
+                    "name": (top.get("displayName") or {}).get("text") or name,
+                    "formatted_address": top.get("formattedAddress"),
+                    "rating": top.get("rating"),
+                    "user_ratings_total": top.get("userRatingCount") or 0,
+                }
+        except Exception:
+            pass
 
-        results = data.get("results", [])
-        if not results:
+        # Fallback to Legacy Places API if Places (New) didn't return results
+        if not place:
+            query = urllib.parse.quote(f"{name} {muni} Norway")
+            url_legacy = f"https://maps.googleapis.com/maps/api/place/textsearch/json?query={query}&key={api_key}"
+            req_legacy = urllib.request.Request(url_legacy, headers={"User-Agent": UA_HEADER})
+            with urllib.request.urlopen(req_legacy, timeout=timeout) as resp:
+                data_legacy = json.loads(resp.read().decode("utf-8", errors="replace"))
+            results = data_legacy.get("results", [])
+            if results:
+                place = results[0]
+
+        if not place:
             return [], None, cost
 
-        place = results[0]
         rating = place.get("rating")
         review_count = place.get("user_ratings_total") or 0
         place_id = str(place.get("place_id") or "")

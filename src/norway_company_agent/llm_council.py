@@ -177,10 +177,14 @@ class CouncilMember:
                 text = data.get("message", {}).get("content", [{}])[0].get("text", "")
                 return self._parse_llm_response(text, "live_cohere", fin, roles, loc, footprint, website)
 
-        # 5. HuggingFace Inference API (Bearer token auth)
+        # 5. HuggingFace Serverless Inference Router (OpenAI-compatible)
         if self.provider == "huggingface":
-            url = f"https://api-inference.huggingface.co/models/{self.model_name}"
-            req_data = json.dumps({"inputs": prompt, "parameters": {"max_new_tokens": 200}}).encode("utf-8")
+            url = "https://router.huggingface.co/v1/chat/completions"
+            req_data = json.dumps({
+                "model": self.model_name or "meta-llama/Llama-3.1-8B-Instruct",
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 200,
+            }).encode("utf-8")
             req = urllib.request.Request(
                 url,
                 data=req_data,
@@ -188,7 +192,7 @@ class CouncilMember:
             )
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
-                text = data[0].get("generated_text", "") if isinstance(data, list) else str(data)
+                text = data["choices"][0]["message"]["content"]
                 return self._parse_llm_response(text, "live_huggingface", fin, roles, loc, footprint, website)
 
         return None
@@ -264,8 +268,8 @@ class LLMCouncil:
     def __init__(self):
         self.members = [
             CouncilMember("Google Gemini 1.5 Flash", "gemini", "free_tier", "GEMINI_API_KEY", "gemini-1.5-flash"),
-            CouncilMember("Groq Llama 3.3 70B", "groq", "free_tier", "GROQ_API_KEY", "llama-3.3-70b-versatile"),
-            CouncilMember("Hugging Face Qwen 2.5", "huggingface", "free_tier", "HUGGINGFACE_TOKEN", "Qwen/Qwen2.5-72B-Instruct"),
+            CouncilMember("Groq Llama / Qwen", "groq", "free_tier", "GROQ_API_KEY", "qwen/qwen3.8-27b"),
+            CouncilMember("Hugging Face Llama 3.1", "huggingface", "free_tier", "HUGGINGFACE_TOKEN", "meta-llama/Llama-3.1-8B-Instruct"),
             CouncilMember("Local NorBERT Neural Arbiter", "local_norbert", "local_neural", None, "NOSIBLE/financial-sentiment-v1.2-base"),
             CouncilMember("Anthropic Claude 3.5 Sonnet", "claude", "paid_tier", "ANTHROPIC_API_KEY", "claude-3-5-haiku-20241022"),
             CouncilMember("OpenAI GPT-4o-mini", "openai", "paid_tier", "OPENAI_API_KEY", "gpt-4o-mini"),

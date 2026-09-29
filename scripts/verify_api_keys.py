@@ -42,21 +42,25 @@ def check_gemini(key: str) -> tuple[bool, str]:
 
 
 def check_groq(key: str) -> tuple[bool, str]:
-    try:
-        url = "https://api.groq.com/openai/v1/chat/completions"
-        payload = json.dumps({"model": "llama-3.3-70b-versatile", "messages": [{"role": "user", "content": "ping"}], "max_tokens": 5}).encode("utf-8")
-        req = urllib.request.Request(url, data=payload, headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json", "User-Agent": UA})
-        with urllib.request.urlopen(req, timeout=8.0) as resp:
-            return True, "Connected (Llama 3.3 70B responding)"
-    except urllib.error.HTTPError as e:
+    models = ["qwen/qwen3.8-27b", "openai/gpt-oss-120b", "llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
+    for m in models:
         try:
-            err = json.loads(e.read().decode())
-            msg = err.get("error", {}).get("message") or str(e)
-            return False, f"HTTP {e.code}: {msg}"
-        except Exception:
-            return False, f"HTTP {e.code}: {e.reason}"
-    except Exception as e:
-        return False, str(e)
+            url = "https://api.groq.com/openai/v1/chat/completions"
+            payload = json.dumps({"model": m, "messages": [{"role": "user", "content": "ping"}], "max_tokens": 5}).encode("utf-8")
+            req = urllib.request.Request(url, data=payload, headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json", "User-Agent": UA})
+            with urllib.request.urlopen(req, timeout=8.0) as resp:
+                return True, f"Connected (model: {m})"
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                continue
+            try:
+                err = json.loads(e.read().decode())
+                return False, f"HTTP {e.code}: {err.get('error', {}).get('message')}"
+            except Exception:
+                return False, f"HTTP {e.code}: {e.reason}"
+        except Exception as e:
+            return False, str(e)
+    return False, "No active Groq models available"
 
 
 def check_mistral(key: str) -> tuple[bool, str]:
@@ -79,15 +83,19 @@ def check_mistral(key: str) -> tuple[bool, str]:
 
 def check_huggingface(key: str) -> tuple[bool, str]:
     try:
-        url = "https://api-inference.huggingface.co/models/Qwen/Qwen2.5-72B-Instruct"
-        payload = json.dumps({"inputs": "Hello", "parameters": {"max_new_tokens": 5}}).encode("utf-8")
+        url = "https://router.huggingface.co/v1/chat/completions"
+        payload = json.dumps({
+            "model": "meta-llama/Llama-3.1-8B-Instruct",
+            "messages": [{"role": "user", "content": "ping"}],
+            "max_tokens": 5,
+        }).encode("utf-8")
         req = urllib.request.Request(url, data=payload, headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json", "User-Agent": UA})
         with urllib.request.urlopen(req, timeout=10.0) as resp:
-            return True, "Connected (Qwen 2.5 72B responding)"
+            return True, "Connected (Llama 3.1 8B via HF Router)"
     except urllib.error.HTTPError as e:
         try:
             err = json.loads(e.read().decode())
-            msg = err.get("error", {}).get("message") or str(e)
+            msg = err.get("error") or str(e)
             return False, f"HTTP {e.code}: {msg}"
         except Exception:
             return False, f"HTTP {e.code}: {e.reason}"
@@ -116,6 +124,34 @@ def check_tavily(key: str) -> tuple[bool, str]:
         return False, str(e)
 
 
+def check_google_places(key: str) -> tuple[bool, str]:
+    try:
+        url = "https://places.googleapis.com/v1/places:searchText"
+        payload = json.dumps({"textQuery": "Equinor Stavanger Norway"}).encode("utf-8")
+        req = urllib.request.Request(
+            url,
+            data=payload,
+            headers={
+                "Content-Type": "application/json",
+                "X-Goog-Api-Key": key,
+                "X-Goog-FieldMask": "places.displayName,places.formattedAddress,places.id",
+                "User-Agent": UA,
+            },
+        )
+        with urllib.request.urlopen(req, timeout=8.0) as resp:
+            data = json.loads(resp.read().decode())
+            count = len(data.get("places", []))
+            return True, f"Connected (Places API New, found {count} results)"
+    except urllib.error.HTTPError as e:
+        try:
+            err = json.loads(e.read().decode())
+            return False, f"HTTP {e.code}: {err.get('error', {}).get('message')}"
+        except Exception:
+            return False, f"HTTP {e.code}: {e.reason}"
+    except Exception as e:
+        return False, str(e)
+
+
 def main() -> None:
     print("=" * 70)
     print("SIGNALPOST API KEYS & TOKENS VERIFICATION DIAGNOSTIC")
@@ -125,7 +161,7 @@ def main() -> None:
     print("\n--- [1. 100% FREE TOOLS & TOKENS (No Credit Card Required)] ---")
     free_tools = {
         "GEMINI_API_KEY": ("Google Gemini 1.5 Flash", check_gemini),
-        "GROQ_API_KEY": ("Groq Llama 3.3 70B", check_groq),
+        "GROQ_API_KEY": ("Groq Llama / Qwen", check_groq),
         "TAVILY_API_KEY": ("Tavily AI Search (1,000 queries/mo)", check_tavily),
         "HUGGINGFACE_TOKEN": ("Hugging Face User Access Token", check_huggingface),
     }
@@ -151,6 +187,7 @@ def main() -> None:
     # 2. Paid Commercial Services (Credit Card / Billing Setup Required)
     print("\n--- [2. PAID COMMERCIAL SERVICES (Credit Card / Billing Required)] ---")
     paid_tools = {
+        "GOOGLE_PLACES_API_KEY": ("Google Places API", check_google_places),
         "BRAVE_API_KEY": ("Brave Search API", check_brave),
         "MISTRAL_API_KEY": ("Mistral AI API", check_mistral),
     }
