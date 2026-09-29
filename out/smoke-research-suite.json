@@ -1,0 +1,37 @@
+{
+  "corpus": "dynamically grounded smoke-100 research suite",
+  "single_company": {
+    "organisation_number": "985589003",
+    "question": "Who leads this company and what financial facts and locations are available?",
+    "minimum_facts": 6
+  },
+  "screens": [
+    {
+      "query": "top 5 by revenue",
+      "expected_organisation_numbers": [
+        "930856916",
+        "916340257",
+        "930355496",
+        "926790137",
+        "960711033"
+      ],
+      "expected_filter_fields": []
+    },
+    {
+      "query": "companies in OSLO with more than 0 employees",
+      "expected_organisation_numbers": [
+        "916361750",
+        "924585463",
+        "928940837"
+      ],
+      "expected_filter_fields": [
+        "municipality",
+        "employees"
+      ]
+    }
+  ],
+  "unsupported": {
+    "query": "companies in Oslo with positive Glassdoor sentiment",
+    "must_abstain": true
+  }
+}

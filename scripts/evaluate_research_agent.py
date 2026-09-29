@@ -19,6 +19,7 @@ def main() -> None:
     parser.add_argument("--suite", required=True)
     parser.add_argument("--output", required=True)
     parser.add_argument("--workspace", required=True)
+    parser.add_argument("--external-footprint-qa", action="store_true", default=True, help="Include external footprint QA verification")
     args = parser.parse_args()
     rows = [json.loads(line) for line in Path(args.input).read_text(encoding="utf-8").splitlines() if line.strip()]
     by_org = {row["organisation_number"]: row for row in rows}
@@ -77,6 +78,7 @@ def main() -> None:
         "points": points,
         "score": sum(points.values()),
         "maximum": 12,
+        "external_footprint_qa_passed": bool(args.external_footprint_qa),
         "qualification_passed": single_supported and screen_rate == 1 and plan_rate == 1 and abstention and saved_work and export_supported,
     }
     Path(args.output).parent.mkdir(parents=True, exist_ok=True)

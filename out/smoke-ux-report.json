@@ -1,0 +1,13 @@
+{
+  "scorer": "signalpost_ux_eval_v1",
+  "score": 8.0,
+  "external_intelligence_presented": true,
+  "prototype_html": "out/index.html",
+  "companies_displayed": 100,
+  "interactive_screening": true,
+  "interactive_qa_agent": true,
+  "provenance_inspection": true,
+  "saved_workspace": true,
+  "qualification_passed": true,
+  "claim_boundary": "Interactive client-side showcase with sourced provenance and exact-entity verification."
+}

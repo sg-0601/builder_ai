@@ -11,7 +11,11 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from norway_company_agent.external_footprint import publishable_observation, validate_observation  # noqa: E402
+from norway_company_agent.external_footprint import (  # noqa: E402
+    PUBLISHABLE_ACQUISITION_MODES,
+    publishable_observation,
+    validate_observation,
+)
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -73,6 +77,8 @@ def main() -> None:
     entity_precision = ratio(len(published) - wrong_entity, len(published))
     metric_precision = ratio(len(published) - wrong_metric, len(published))
     sentiment_accuracy = ratio(sentiment_correct, len(sentiment_audited)) if sentiment_audited else None
+    fresh_coverage = ratio(sum(bool(item.get("retrieved_at")) for item in accepted_all), len(accepted_all)) if accepted_all else 0.0
+    connector_policy = all(item.get("acquisition_mode") in PUBLISHABLE_ACQUISITION_MODES and item.get("rights_status") == "approved" for item in accepted_all) if accepted_all else False
     qualification = bool(
         audit_size_gate
         and published
@@ -95,6 +101,8 @@ def main() -> None:
         "sentiment_audited": len(sentiment_audited),
         "sentiment_accuracy": sentiment_accuracy,
         "coverage": coverage,
+        "fresh_coverage": fresh_coverage,
+        "connector_policy_passed": connector_policy,
         "platform_counts": dict(Counter(str(item.get("platform")) for item in accepted_all)),
         "acquisition_modes": dict(acquisition_modes),
         "minimum_audit": args.minimum_audit,

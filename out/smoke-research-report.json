@@ -1,0 +1,59 @@
+{
+  "corpus": "dynamically grounded smoke-100 research suite",
+  "profiles": 100,
+  "questions": 4,
+  "single_company_supported": true,
+  "screen_results": [
+    {
+      "query": "top 5 by revenue",
+      "expected": [
+        "930856916",
+        "916340257",
+        "930355496",
+        "926790137",
+        "960711033"
+      ],
+      "actual": [
+        "930856916",
+        "916340257",
+        "930355496",
+        "926790137",
+        "960711033"
+      ],
+      "exact_membership_and_order": true,
+      "exact_plan": true,
+      "citations_complete": true
+    },
+    {
+      "query": "companies in OSLO with more than 0 employees",
+      "expected": [
+        "916361750",
+        "924585463",
+        "928940837"
+      ],
+      "actual": [
+        "916361750",
+        "924585463",
+        "928940837"
+      ],
+      "exact_membership_and_order": true,
+      "exact_plan": true,
+      "citations_complete": true
+    }
+  ],
+  "unsupported_abstention": true,
+  "saved_work": true,
+  "provenance_export": true,
+  "points": {
+    "cited_single_company_qa": 4,
+    "cross_company_screening": 3.0,
+    "exact_inspectable_filters": 2.0,
+    "unsupported_abstention": 1,
+    "saved_history": 1,
+    "provenance_export": 1
+  },
+  "score": 12.0,
+  "maximum": 12,
+  "external_footprint_qa_passed": true,
+  "qualification_passed": true
+}
