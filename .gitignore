@@ -7,4 +7,10 @@ brreg-enheter.csv
 signalpost-universe.jsonl.gz
 .env
 *.env
+snapshots/*.jsonl
+claims/*.jsonl
+reports/*.json
+!snapshots/.gitkeep
+!claims/.gitkeep
+!reports/.gitkeep
 
