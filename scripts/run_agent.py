@@ -151,6 +151,37 @@ def to_output_contract_envelope(
     }
 
 
+import threading
+
+
+class BudgetCircuitBreaker:
+    """Thread-safe circuit breaker ensuring cumulative API spend never breaches $10.00."""
+
+    def __init__(self, hard_limit_usd: float = 8.50):
+        self.hard_limit_usd = hard_limit_usd
+        self._spent_usd = 0.0
+        self._lock = threading.Lock()
+        self.tripped = False
+
+    def can_spend(self, amount: float) -> bool:
+        with self._lock:
+            if self._spent_usd + amount >= self.hard_limit_usd:
+                if not self.tripped:
+                    self.tripped = True
+                    print(f"\n[BUDGET CIRCUIT BREAKER] Hard cap reached (${self._spent_usd:.4f} >= ${self.hard_limit_usd:.2f}). Safe fallback to free official APIs engaged.")
+                return False
+            return True
+
+    def record_spend(self, amount: float) -> None:
+        with self._lock:
+            self._spent_usd += amount
+
+    @property
+    def total_spent(self) -> float:
+        with self._lock:
+            return round(self._spent_usd, 4)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Signalpost Master Agent - Full Evaluation Pipeline")
     parser.add_argument("--organisations", required=True, help="Input organisation-number list (JSON, JSONL, or txt)")
@@ -192,6 +223,7 @@ def main() -> None:
     requested_modules = [item.strip() for item in args.modules.split(",") if item.strip()]
     fetch_modules = set(requested_modules) - {"registry", "accounting_obligation", "website"}
     operations = {"requests": 0, "bytes": 0, "latencies_ms": []}
+    budget_guard = BudgetCircuitBreaker(hard_limit_usd=8.50)
 
     # Step 3: Define enrichment function for a single profile
     def enrich(profile: dict) -> tuple[dict, dict]:
@@ -231,8 +263,10 @@ def main() -> None:
             ext_requests += 1
 
             # 5. Brave Search API (Paid / Free Tier via BRAVE_API_KEY)
-            if args.brave_api_key and profile.get("evidence", {}).get("website", {}).get("status") != "available":
+            if args.brave_api_key and budget_guard.can_spend(0.005) and profile.get("evidence", {}).get("website", {}).get("status") != "available":
                 brave_res, brave_cost = fetch_brave_search(profile, args.brave_api_key)
+                if brave_cost > 0:
+                    budget_guard.record_spend(brave_cost)
                 p_cost += brave_cost
                 ext_requests += 1
                 if brave_res:
@@ -252,8 +286,10 @@ def main() -> None:
                             observations.extend(extract_website_signals(profile))
 
             # 6. Google Places API (Paid via GOOGLE_PLACES_API_KEY)
-            if args.google_places_key:
+            if args.google_places_key and budget_guard.can_spend(0.017):
                 places_obs, places_res, places_cost = fetch_google_places(profile, args.google_places_key)
+                if places_cost > 0:
+                    budget_guard.record_spend(places_cost)
                 observations.extend(places_obs)
                 p_cost += places_cost
                 ext_requests += 1
