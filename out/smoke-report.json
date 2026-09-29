@@ -1,8 +1,8 @@
 {
   "run_id": "signalpost-run-001",
-  "started_at": "2026-09-29T15:06:21.861495Z",
-  "completed_at": "2026-09-29T15:09:19.757305Z",
-  "total_elapsed_ms": 177895,
+  "started_at": "2026-09-29T15:51:40.388722Z",
+  "completed_at": "2026-09-29T15:54:22.099259Z",
+  "total_elapsed_ms": 161710,
   "expected_count": 100,
   "emitted_envelopes": 100,
   "resumed_profiles": 0,
@@ -23,12 +23,35 @@
     "requested": 100,
     "selected": 100
   },
+  "consensus": {
+    "verified_profiles": 100,
+    "mean_agreement_rate": 0.993,
+    "engines_active": [
+      "Brave Search Commercial Discovery API",
+      "Brreg Enhetsregisteret Official Registry",
+      "Brreg Official Enhetsregisteret Domain Record",
+      "Brreg Official Workforce Snapshot",
+      "Brreg Regnskapsregisteret Official API",
+      "Brreg Roller Official API",
+      "Brreg Underenheter Municipal Register",
+      "Company Website Surface Extractor",
+      "Enhetsregisteret Foundation Structure",
+      "First-Party Executive Web Extractor",
+      "Google News RSS & NorBERT Sentiment Engine",
+      "Google Places Business Listing Engine",
+      "Google Places Commercial Geo API",
+      "NAV Arbeidsplassen Official Employment API",
+      "Norwegian Accounting Standard Rules Engine",
+      "Trafilatura Reverse-Proof HTTP Prober",
+      "Universal Corporate Accounts Master"
+    ]
+  },
   "operations": {
-    "requests": 732,
-    "bytes": 900753,
-    "p50_ms": 1372,
-    "p95_ms": 3436,
-    "total_elapsed_ms": 177895,
+    "requests": 736,
+    "bytes": 2349391,
+    "p50_ms": 1382,
+    "p95_ms": 4449,
+    "total_elapsed_ms": 161710,
     "third_party_cost_usd": 0.0
   },
   "validation": {

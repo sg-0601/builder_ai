@@ -45,6 +45,10 @@ from norway_company_agent.batch import (
     terminal_envelope,
     validate_envelopes,
 )
+from norway_company_agent.consensus_engine import (
+    arbitrate_company_profile,
+    build_raw_engine_signals,
+)
 from norway_company_agent.evidence import evidence, utc_now
 from norway_company_agent.external_footprint import aggregate_footprint, publishable_observation
 from norway_company_agent.identity import apply_website_identity_gate
@@ -275,6 +279,39 @@ def main() -> None:
                 "content_sha256": hashlib.sha256(json.dumps(footprint_summary, sort_keys=True).encode()).hexdigest(),
             }
 
+            # Multi-Engine Consensus & Arbitration across all 5 Pillars
+            # (Financials, Leadership, Location, Hiring & Activity, Sources Found)
+            engine_signals = build_raw_engine_signals(
+                profile,
+                observations,
+                p_cost=p_cost,
+                brave_res=profile.get("evidence", {}).get("brave_search", {}).get("value"),
+                places_res=profile.get("evidence", {}).get("places", {}).get("value"),
+            )
+            consensus_summary = arbitrate_company_profile(profile, engine_signals)
+            profile["evidence"]["consensus_verification"] = {
+                "field": "consensus_verification",
+                "status": "available",
+                "value": consensus_summary,
+                "observations": [
+                    {
+                        "pillar": p,
+                        "consensus": res["consensus"],
+                        "agreement_rate": res["agreement_rate"],
+                        "resolved_value": res["resolved_value"],
+                        "discussion": res["discussion"],
+                        "participating_engines": res["participating_engines"],
+                    }
+                    for p, res in consensus_summary["pillars"].items()
+                    if p != "website"
+                ],
+                "retrieved_at": utc_now(),
+                "source_class": "multi_engine_consensus",
+                "source_url": "https://builderr.ai/consensus-engine",
+                "content_sha256": hashlib.sha256(json.dumps(consensus_summary, sort_keys=True).encode()).hexdigest(),
+            }
+            profile["consensus_verification"] = consensus_summary
+
         p_elapsed_ms = int((time.monotonic() - p_start) * 1000)
         metric = {
             "requests": len(metrics) + website_metrics["requests"] + ext_requests,
@@ -361,6 +398,12 @@ def main() -> None:
 
     total_third_party_cost = round(sum(p.get("run_metrics", {}).get("third_party_cost_usd", 0.0) for p in ordered_profiles), 4)
 
+    consensus_stats = {
+        "verified_profiles": sum(1 for p in ordered_profiles if p.get("consensus_verification", {}).get("arbitration_status") == "fully_verified"),
+        "mean_agreement_rate": round(sum(p.get("consensus_verification", {}).get("overall_agreement_rate", 0.0) for p in ordered_profiles) / len(ordered_profiles), 3) if ordered_profiles else 0.0,
+        "engines_active": sorted(list({eng for p in ordered_profiles for eng in p.get("consensus_verification", {}).get("engine_audit", {}).get("engines_queried", [])})),
+    }
+
     report = {
         "run_id": args.run_id,
         "started_at": started_at,
@@ -372,6 +415,7 @@ def main() -> None:
         "profiles_fetched_this_run": len(pending_profiles),
         "modules": requested_modules,
         "registry": registry_metadata,
+        "consensus": consensus_stats,
         "operations": {
             "requests": operations["requests"],
             "bytes": operations["bytes"],
@@ -387,6 +431,8 @@ def main() -> None:
     Path(args.report).write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"\nRun complete! Emitted {len(envelopes)} envelopes. Report saved to {args.report}")
     print(f"Validation: {'PASSED' if validation['passed'] else 'FAILED'}")
+    print(f"Multi-Engine Consensus: {consensus_stats['verified_profiles']}/{len(ordered_profiles)} fully verified (Mean agreement: {consensus_stats['mean_agreement_rate'] * 100:.1f}%)")
+    print(f"Active Verification Engines: {len(consensus_stats['engines_active'])} engines ({', '.join(consensus_stats['engines_active'][:4])}...)")
     print(f"P95 Latency: {p95_ms} ms (Budget <= 10,000 ms)")
     print(f"Third-Party Cost: ${total_third_party_cost:.4f}")
 

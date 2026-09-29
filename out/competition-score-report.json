@@ -41,7 +41,7 @@
     "product_ux_design": 8.0
   },
   "raw_score": 100.0,
-  "target": 80.0,
+  "target": 80,
   "target_met": true,
   "qualification_gates": {
     "external_audit_at_least_100": true,
