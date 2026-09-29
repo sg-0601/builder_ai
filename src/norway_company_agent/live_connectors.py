@@ -288,11 +288,11 @@ def fetch_brave_search(profile: dict[str, Any], api_key: str | None = None, time
 # =============================================================================
 # 6. Google Places API Connector (Paid / Configurable via GOOGLE_PLACES_API_KEY)
 # =============================================================================
-def fetch_google_places(profile: dict[str, Any], api_key: str | None = None, timeout: float = 5.0) -> tuple[dict[str, Any] | None, float]:
+def fetch_google_places(profile: dict[str, Any], api_key: str | None = None, timeout: float = 5.0) -> tuple[list[dict[str, Any]], dict[str, Any] | None, float]:
     """Fetch verified ratings and reviews via official Google Places API."""
     api_key = api_key or os.getenv("GOOGLE_PLACES_API_KEY")
     if not api_key:
-        return None, 0.0
+        return [], None, 0.0
 
     name = str(profile.get("name") or "")
     muni = str(profile.get("municipality") or "")
@@ -307,16 +307,61 @@ def fetch_google_places(profile: dict[str, Any], api_key: str | None = None, tim
 
         results = data.get("results", [])
         if not results:
-            return None, cost
+            return [], None, cost
 
         place = results[0]
-        return {
-            "place_id": place.get("place_id"),
+        rating = place.get("rating")
+        review_count = place.get("user_ratings_total") or 0
+        place_id = str(place.get("place_id") or "")
+        org = str(profile.get("organisation_number") or "")
+        retrieved_at = utc_now()
+        digest = hashlib.sha256(f"{org}|{place_id}|{rating}|{review_count}".encode()).hexdigest()
+
+        observations = [{
+            "id": f"places-id-{org}-{place_id[:16]}",
+            "organisation_number": org,
+            "platform": "google_places",
+            "signal_type": "place_summary",
+            "source_url": f"https://www.google.com/maps/place/?q=place_id:{place_id}",
+            "retrieved_at": retrieved_at,
+            "content_sha256": digest,
+            "exact_entity": True,
+            "identity_proof": [{"type": "google_place_id_match", "value": place_id}],
+            "acquisition_mode": "licensed_api",
+            "rights_status": "approved",
+            "source_class": "public_business_listing",
+            "evidence_span": f"Google Places listing for {name}: {place.get('formatted_address', '')}",
+            "metrics": {"place_id": place_id, "address": place.get("formatted_address")},
+            "strategy": "places_identity_resolution",
+        }]
+
+        if rating is not None and review_count > 0:
+            observations.append({
+                "id": f"places-rating-{org}-{place_id[:16]}",
+                "organisation_number": org,
+                "platform": "google_places",
+                "signal_type": "review_summary",
+                "source_url": f"https://www.google.com/maps/place/?q=place_id:{place_id}",
+                "retrieved_at": retrieved_at,
+                "content_sha256": digest,
+                "exact_entity": True,
+                "identity_proof": [{"type": "google_place_id_match", "value": place_id}],
+                "acquisition_mode": "licensed_api",
+                "rights_status": "approved",
+                "source_class": "customer_review",
+                "evidence_span": f"Google aggregate rating: {rating}/5 based on {review_count} customer reviews.",
+                "metrics": {"rating": rating, "rating_scale": 5, "review_count": review_count},
+                "strategy": "places_rating_reviews",
+            })
+
+        place_meta = {
+            "place_id": place_id,
             "name": place.get("name"),
-            "rating": place.get("rating"),
-            "user_ratings_total": place.get("user_ratings_total"),
+            "rating": rating,
+            "user_ratings_total": review_count,
             "formatted_address": place.get("formatted_address"),
             "cost_usd": cost,
-        }, cost
+        }
+        return observations, place_meta, cost
     except Exception:
-        return None, cost
+        return [], None, cost

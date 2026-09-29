@@ -239,10 +239,18 @@ def main() -> None:
                         "source_url": "https://api.search.brave.com",
                         "retrieved_at": utc_now(),
                     }
+                    candidate_site = brave_res.get("candidate_url")
+                    if candidate_site:
+                        discov_rec, discov_metrics = fetch_website(candidate_site)
+                        discov_gated = apply_website_identity_gate(profile, discov_rec)["website"]
+                        if discov_gated.get("status") == "available" and (discov_gated.get("value", {}).get("identity_assessment", {}) or {}).get("publishable"):
+                            profile["evidence"]["website"] = discov_gated
+                            observations.extend(extract_website_signals(profile))
 
             # 6. Google Places API (Paid via GOOGLE_PLACES_API_KEY)
             if args.google_places_key:
-                places_res, places_cost = fetch_google_places(profile, args.google_places_key)
+                places_obs, places_res, places_cost = fetch_google_places(profile, args.google_places_key)
+                observations.extend(places_obs)
                 p_cost += places_cost
                 ext_requests += 1
                 if places_res:
