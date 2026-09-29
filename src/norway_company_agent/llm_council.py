@@ -103,13 +103,18 @@ class CouncilMember:
 
         # 1. Google Gemini
         if self.provider == "gemini":
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:generateContent?key={api_key}"
-            req_data = json.dumps({"contents": [{"parts": [{"text": prompt}]}]}).encode("utf-8")
-            req = urllib.request.Request(url, data=req_data, headers={"Content-Type": "application/json", **ua_headers})
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-                text = data["candidates"][0]["content"]["parts"][0]["text"]
-                return self._parse_llm_response(text, "live_gemini", fin, roles, loc, footprint, website)
+            gemini_models = ["gemini-flash-lite-latest", self.model_name, "gemini-flash-latest", "gemini-3.8-flash"]
+            for gm in gemini_models:
+                try:
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{gm}:generateContent?key={api_key}"
+                    req_data = json.dumps({"contents": [{"parts": [{"text": prompt}]}]}).encode("utf-8")
+                    req = urllib.request.Request(url, data=req_data, headers={"Content-Type": "application/json", **ua_headers})
+                    with urllib.request.urlopen(req, timeout=timeout) as resp:
+                        data = json.loads(resp.read().decode("utf-8"))
+                        text = data["candidates"][0]["content"]["parts"][0]["text"]
+                        return self._parse_llm_response(text, f"live_gemini", fin, roles, loc, footprint, website)
+                except Exception:
+                    continue
 
         # 2. OpenAI / Groq / DeepSeek / Mistral / Perplexity (OpenAI-compatible)
         endpoints = {
@@ -267,7 +272,7 @@ class LLMCouncil:
 
     def __init__(self):
         self.members = [
-            CouncilMember("Google Gemini 1.5 Flash", "gemini", "free_tier", "GEMINI_API_KEY", "gemini-1.5-flash"),
+            CouncilMember("Google Gemini Flash Lite", "gemini", "free_tier", "GEMINI_API_KEY", "gemini-flash-lite-latest"),
             CouncilMember("Groq Llama / Qwen", "groq", "free_tier", "GROQ_API_KEY", "qwen/qwen3.8-27b"),
             CouncilMember("Hugging Face Llama 3.1", "huggingface", "free_tier", "HUGGINGFACE_TOKEN", "meta-llama/Llama-3.1-8B-Instruct"),
             CouncilMember("Local NorBERT Neural Arbiter", "local_norbert", "local_neural", None, "NOSIBLE/financial-sentiment-v1.2-base"),

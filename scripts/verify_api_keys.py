@@ -22,23 +22,28 @@ UA = "SignalpostKeyVerifier/1.0"
 
 
 def check_gemini(key: str) -> tuple[bool, str]:
-    try:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={key}"
-        payload = json.dumps({"contents": [{"parts": [{"text": "Reply with 'OK'"}]}]}).encode("utf-8")
-        req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json", "User-Agent": UA})
-        with urllib.request.urlopen(req, timeout=8.0) as resp:
-            data = json.loads(resp.read().decode())
-            txt = data["candidates"][0]["content"]["parts"][0]["text"].strip()
-            return True, f"Connected (response: {txt[:20]})"
-    except urllib.error.HTTPError as e:
+    models = ["gemini-flash-lite-latest", "gemini-flash-latest", "gemini-3.8-flash"]
+    for m in models:
         try:
-            err = json.loads(e.read().decode())
-            msg = err.get("error", {}).get("message") or str(e)
-            return False, f"HTTP {e.code}: {msg}"
-        except Exception:
-            return False, f"HTTP {e.code}: {e.reason}"
-    except Exception as e:
-        return False, str(e)
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={key}"
+            payload = json.dumps({"contents": [{"parts": [{"text": "Reply with 'OK'"}]}]}).encode("utf-8")
+            req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json", "User-Agent": UA})
+            with urllib.request.urlopen(req, timeout=8.0) as resp:
+                data = json.loads(resp.read().decode())
+                txt = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+                return True, f"Connected ({m}, response: {txt[:20]})"
+        except urllib.error.HTTPError as e:
+            if e.code in (404, 503):
+                continue
+            try:
+                err = json.loads(e.read().decode())
+                msg = err.get("error", {}).get("message") or str(e)
+                return False, f"HTTP {e.code}: {msg}"
+            except Exception:
+                return False, f"HTTP {e.code}: {e.reason}"
+        except Exception as e:
+            return False, str(e)
+    return False, "No active Gemini models found"
 
 
 def check_groq(key: str) -> tuple[bool, str]:
