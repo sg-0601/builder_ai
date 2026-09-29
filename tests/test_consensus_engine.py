@@ -94,7 +94,20 @@ class TestConsensusEngine(unittest.TestCase):
         self.assertIn("unanimous_pillars", summary)
         self.assertIn("arbitration_status", summary)
         self.assertIn("engine_audit", summary)
-        self.assertGreater(summary["engine_audit"]["total_votes_collected"], 10)
+        self.assertIn("ai_council", summary)
+        self.assertEqual(summary["engine_audit"]["ai_council_members"], 10)
+        self.assertGreater(summary["engine_audit"]["total_votes_collected"], 20)
+
+    def test_llm_council_deliberation(self):
+        from norway_company_agent.llm_council import LLMCouncil
+
+        council = LLMCouncil()
+        self.assertEqual(len(council.members), 10)
+        profile = {"organisation_number": "912345678", "name": "Equinor Test AS", "evidence": {}}
+        res = council.evaluate_council(profile)
+        self.assertEqual(res["council_size"], 10)
+        self.assertEqual(res["engines_evaluated"], 10)
+        self.assertIn("10-Engine Council deliberated", res["discussion_log"])
 
 
 if __name__ == "__main__":

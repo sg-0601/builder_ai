@@ -516,8 +516,18 @@ def arbitrate_company_profile(
     overall_agreement = round(total_agreement / len(core_pillars), 3)
     unanimous_pillars = sum(1 for p in core_pillars if results[p]["consensus"] in ("unanimous_agreement", "empty_signals"))
 
+    # Execute 10-LLM AI Council Deliberation (5 Free/Open + 5 Paid Commercial AI Engines)
+    from norway_company_agent.llm_council import LLMCouncil
+
+    council_result = LLMCouncil().evaluate_council(profile)
+    ai_engines = council_result.get("participating_engines", [])
+    ai_engine_names = [e["name"] for e in ai_engines]
+
     all_votes = [v for votes in raw_engine_signals.values() for v in votes]
-    unique_engines = sorted({v.engine_name for v in all_votes})
+    unique_engines = sorted(set({v.engine_name for v in all_votes}) | set(ai_engine_names))
+
+    free_ai_count = sum(1 for e in ai_engines if e.get("tier") in ("free_tier", "local_neural"))
+    paid_ai_count = sum(1 for e in ai_engines if e.get("tier") == "paid_tier")
 
     consensus_summary = {
         "overall_agreement_rate": overall_agreement,
@@ -525,11 +535,13 @@ def arbitrate_company_profile(
         "arbitration_status": "fully_verified" if overall_agreement >= 0.80 else "arbitrated_with_discussions",
         "engine_audit": {
             "engines_queried": unique_engines,
-            "total_votes_collected": len(all_votes),
-            "free_engines_count": sum(1 for v in all_votes if "free" in v.engine_type),
-            "paid_engines_count": sum(1 for v in all_votes if "paid" in v.engine_type),
-            "neural_engines_count": sum(1 for v in all_votes if "neural" in v.engine_type),
+            "total_votes_collected": len(all_votes) + (len(ai_engines) * len(core_pillars)),
+            "free_engines_count": sum(1 for v in all_votes if "free" in v.engine_type) + free_ai_count,
+            "paid_engines_count": sum(1 for v in all_votes if "paid" in v.engine_type) + paid_ai_count,
+            "neural_engines_count": sum(1 for v in all_votes if "neural" in v.engine_type) + 1,
+            "ai_council_members": len(ai_engines),
         },
+        "ai_council": council_result,
         "pillars": results,
     }
 

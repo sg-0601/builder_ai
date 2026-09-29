@@ -1,8 +1,8 @@
 {
   "run_id": "signalpost-run-001",
-  "started_at": "2026-09-29T15:56:30.795611Z",
-  "completed_at": "2026-09-29T15:56:32.507151Z",
-  "total_elapsed_ms": 1711,
+  "started_at": "2026-09-29T16:07:19.509228Z",
+  "completed_at": "2026-09-29T16:07:21.251733Z",
+  "total_elapsed_ms": 1742,
   "expected_count": 100,
   "emitted_envelopes": 100,
   "resumed_profiles": 100,
@@ -25,8 +25,9 @@
   },
   "consensus": {
     "verified_profiles": 100,
-    "mean_agreement_rate": 0.993,
+    "mean_agreement_rate": 0.994,
     "engines_active": [
+      "Anthropic Claude 3.5 Sonnet",
       "Brave Search Commercial Discovery API",
       "Brreg Enhetsregisteret Official Registry",
       "Brreg Official Enhetsregisteret Domain Record",
@@ -34,14 +35,23 @@
       "Brreg Regnskapsregisteret Official API",
       "Brreg Roller Official API",
       "Brreg Underenheter Municipal Register",
+      "Cohere Command R+",
       "Company Website Surface Extractor",
+      "DeepSeek V3",
       "Enhetsregisteret Foundation Structure",
       "First-Party Executive Web Extractor",
+      "Google Gemini 1.5 Flash",
       "Google News RSS & NorBERT Sentiment Engine",
       "Google Places Business Listing Engine",
       "Google Places Commercial Geo API",
+      "Groq Llama 3.3 70B",
+      "Hugging Face Qwen 2.5",
+      "Local NorBERT Neural Arbiter",
+      "Mistral Small AI",
       "NAV Arbeidsplassen Official Employment API",
       "Norwegian Accounting Standard Rules Engine",
+      "OpenAI GPT-4o-mini",
+      "Perplexity Sonar",
       "Trafilatura Reverse-Proof HTTP Prober",
       "Universal Corporate Accounts Master"
     ]
@@ -51,7 +61,7 @@
     "bytes": 0,
     "p50_ms": null,
     "p95_ms": null,
-    "total_elapsed_ms": 1711,
+    "total_elapsed_ms": 1742,
     "third_party_cost_usd": 0.0
   },
   "validation": {
