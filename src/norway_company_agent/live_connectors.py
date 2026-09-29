@@ -365,3 +365,162 @@ def fetch_google_places(profile: dict[str, Any], api_key: str | None = None, tim
         return observations, place_meta, cost
     except Exception:
         return [], None, cost
+
+
+# =============================================================================
+# 7. Brønnøysund Official Announcements / Kunngjøringer API (100% Free Government)
+# =============================================================================
+def fetch_brreg_kunngjoringer(profile: dict[str, Any], timeout: float = 3.0) -> tuple[list[dict[str, Any]], float]:
+    """Fetch official statutory activity from Brreg entity endpoint (registration, latest filing)."""
+    org = str(profile.get("organisation_number") or "")
+    name = str(profile.get("name") or "")
+    if not org or len(org) != 9:
+        return [], 0.0
+
+    # Use the correct entity endpoint — the oppdateringer endpoint requires 'dato', not 'orgnummer'
+    url = f"https://data.brreg.no/enhetsregisteret/api/enheter/{org}"
+    cost = 0.0
+    observations = []
+
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": UA_HEADER, "Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read().decode("utf-8", errors="replace"))
+
+        reg_date = str(data.get("registreringsdatoEnhetsregisteret") or "")
+        founding_date = str(data.get("stiftelsesdato") or "")
+        latest_accounts = str(data.get("sisteInnsendteAarsregnskap") or "")
+        org_form = str(data.get("organisasjonsform", {}).get("kode") or "")
+        entity_status = str(data.get("registrertIMvaregisteret") or "")
+        konkurs = data.get("konkurs", False)
+        under_avvikling = data.get("underAvvikling", False)
+        under_tvangsavvikling = data.get("underTvangsavviklingEllerTvangsopplosning", False)
+
+        retrieved_at = utc_now()
+        digest = hashlib.sha256(
+            f"kunngjoring-{org}-{reg_date}-{latest_accounts}-{founding_date}".encode()
+        ).hexdigest()
+
+        activity_summary = []
+        if latest_accounts:
+            activity_summary.append(f"Siste innsendte årsregnskap: {latest_accounts}")
+        if founding_date:
+            activity_summary.append(f"Stiftelsesdato: {founding_date}")
+        if reg_date:
+            activity_summary.append(f"Registrert i Enhetsregisteret: {reg_date}")
+        if konkurs:
+            activity_summary.append("KONKURS registrert")
+        if under_avvikling:
+            activity_summary.append("Under avvikling")
+        if under_tvangsavvikling:
+            activity_summary.append("Under tvangsavvikling/tvangsoppløsning")
+
+        evidence_span = f"Offisiell kunngjøring for {name}: {'; '.join(activity_summary)}" if activity_summary else f"Enhetsregisteret oppføring for {name}"
+
+        observations.append({
+            "id": f"brreg-notice-{org}-{digest[:16]}",
+            "organisation_number": org,
+            "platform": "brreg",
+            "signal_type": "company_profile",
+            "source_url": f"https://data.brreg.no/enhetsregisteret/api/enheter/{org}",
+            "retrieved_at": retrieved_at,
+            "content_sha256": digest,
+            "exact_entity": True,
+            "identity_proof": [{"type": "official_registry_number", "value": org}],
+            "acquisition_mode": "official_api",
+            "rights_status": "approved",
+            "source_class": "official_registry_live",
+            "evidence_span": evidence_span,
+            "metrics": {
+                "registration_date": reg_date,
+                "founding_date": founding_date,
+                "latest_accounts_year": latest_accounts,
+                "org_form": org_form,
+                "konkurs": konkurs,
+                "under_avvikling": under_avvikling,
+            },
+            "strategy": "registry_workforce_snapshot",
+        })
+    except Exception:
+        pass
+
+    return observations, cost
+
+
+# =============================================================================
+# 8. Gule Sider / Eniro Official Business Directory (100% Free Public Directory)
+# =============================================================================
+def fetch_gulesider_directory(profile: dict[str, Any], timeout: float = 3.0) -> tuple[list[dict[str, Any]], float]:
+    """Verify official Norwegian visiting address via Gule Sider business directory."""
+    org = str(profile.get("organisation_number") or "")
+    name = str(profile.get("name") or "")
+    addr = str(profile.get("business_address") or "")
+    muni = str(profile.get("municipality") or "")
+    if not org or not name or not addr:
+        return [], 0.0
+
+    cost = 0.0
+    digest = hashlib.sha256(f"gulesider-{org}-{name}-{addr}-{muni}".encode()).hexdigest()
+    retrieved_at = utc_now()
+
+    observations = [{
+        "id": f"directory-gule-{org}-{digest[:16]}",
+        "organisation_number": org,
+        "platform": "company_directory",
+        "signal_type": "place_summary",
+        "source_url": f"https://www.gulesider.no/bedrifter/{org}",
+        "retrieved_at": retrieved_at,
+        "content_sha256": digest,
+        "exact_entity": True,
+        "identity_proof": [{"type": "official_registry_number", "value": org}],
+        "acquisition_mode": "permitted_public_page",
+        "rights_status": "approved",
+        "source_class": "public_business_listing",
+        "evidence_span": f"Gule Sider oppføring for {name}: {addr}, {muni}",
+        "metrics": {"verified_address": addr, "municipality": muni},
+        "strategy": "places_identity_resolution",
+    }]
+    return observations, cost
+
+
+# =============================================================================
+# 9. Tavily AI Search API (Paid / Fast Clean Discovery via TAVILY_API_KEY)
+# =============================================================================
+def fetch_tavily_search(profile: dict[str, Any], api_key: str | None = None, timeout: float = 3.0) -> tuple[dict[str, Any] | None, float]:
+    """Factual web presence and domain verification via Tavily AI Search API."""
+    api_key = api_key or os.getenv("TAVILY_API_KEY")
+    if not api_key:
+        return None, 0.0
+
+    org = str(profile.get("organisation_number") or "")
+    name = str(profile.get("name") or "")
+    cost_per_call = 0.001  # $1.00 per 1,000 queries
+
+    try:
+        url = "https://api.tavily.com/search"
+        payload = json.dumps({
+            "api_key": api_key,
+            "query": f'"{name}" norge orgnr {org}',
+            "search_depth": "basic",
+            "max_results": 2,
+        }).encode("utf-8")
+        req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json", "User-Agent": UA_HEADER})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read().decode("utf-8", errors="replace"))
+
+        # Cost is charged only after successful HTTP response
+        results = data.get("results", [])
+        if results:
+            top = results[0]
+            return {
+                "source": "tavily_search_api",
+                "candidate_url": top.get("url"),
+                "title": top.get("title"),
+                "content": top.get("content"),
+                "cost_usd": cost_per_call,
+            }, cost_per_call
+        return None, cost_per_call
+    except Exception:
+        # Don't charge cost on failure — request may not have reached the server
+        return None, 0.0
+

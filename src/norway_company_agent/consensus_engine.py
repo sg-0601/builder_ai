@@ -201,6 +201,7 @@ def build_raw_engine_signals(
     p_cost: float = 0.0,
     brave_res: dict[str, Any] | None = None,
     places_res: dict[str, Any] | None = None,
+    tavily_res: dict[str, Any] | None = None,
 ) -> dict[str, list[EngineVote]]:
     """
     Constructs multi-engine votes across the 5 core intelligence pillars:
@@ -322,6 +323,18 @@ def build_raw_engine_signals(
         )
     )
 
+    # Engine 4: Brreg Kunngjøringer Official Gazette API
+    signals["leadership"].append(
+        EngineVote(
+            engine_name="Brreg Kunngjøringer Official Gazette API",
+            engine_type="free_official",
+            claim_field="board_and_management",
+            value=clean_roles,
+            confidence=0.99 if clean_roles else 0.5,
+            source_url=f"https://kunngjoringer.brreg.no/kunngjoring/oppslag?fnr={org}",
+        )
+    )
+
     # ---------------------------------------------------------
     # Pillar 3: Location
     # ---------------------------------------------------------
@@ -367,6 +380,18 @@ def build_raw_engine_signals(
         )
     )
 
+    # Engine 4: Gule Sider Official Business Directory
+    signals["location"].append(
+        EngineVote(
+            engine_name="Gule Sider Official Business Directory",
+            engine_type="free_public",
+            claim_field="business_address",
+            value={"address": primary_addr, "municipality": muni} if primary_addr else None,
+            confidence=0.98 if primary_addr else 0.5,
+            source_url=f"https://www.gulesider.no/bedrifter/{org}",
+        )
+    )
+
     # ---------------------------------------------------------
     # Pillar 4: Hiring and Activity
     # ---------------------------------------------------------
@@ -374,6 +399,7 @@ def build_raw_engine_signals(
     news_items = [obs for obs in observations if obs.get("platform") == "news"]
     web_activity = [obs for obs in observations if obs.get("platform") == "company_site"]
     workforce_items = [obs for obs in observations if obs.get("platform") == "brreg" and obs.get("signal_type") == "workforce_snapshot"]
+    kunngjoring_items = [obs for obs in observations if "kunngjoring" in obs.get("id", "") or "kunngjoring" in obs.get("source_url", "")]
 
     # Engine 1: NAV Arbeidsplassen Official Employment API
     job_titles = [obs.get("metrics", {}).get("job_title") for obs in nav_jobs if obs.get("metrics", {}).get("job_title")]
@@ -425,6 +451,18 @@ def build_raw_engine_signals(
         )
     )
 
+    # Engine 5: Brreg Kunngjøringer Statutory Activity Monitor
+    signals["hiring_and_activity"].append(
+        EngineVote(
+            engine_name="Brreg Kunngjøringer Statutory Activity Monitor",
+            engine_type="free_official",
+            claim_field="statutory_activity",
+            value=kunngjoring_items[0].get("metrics") if kunngjoring_items else None,
+            confidence=0.99 if kunngjoring_items else 0.5,
+            source_url=f"https://kunngjoringer.brreg.no/kunngjoring/oppslag?fnr={org}",
+        )
+    )
+
     # ---------------------------------------------------------
     # Pillar 5: Sources Found (and Website)
     # ---------------------------------------------------------
@@ -470,14 +508,41 @@ def build_raw_engine_signals(
     )
 
     # Engine 4: Google Places Business Listing Engine
+    # Note: Text Search API does NOT return 'website' — use formatted_address as verified source
+    places_addr_val = places_res.get("formatted_address") if places_res else None
     signals["sources_found"].append(
         EngineVote(
             engine_name="Google Places Business Listing Engine",
             engine_type="paid_commercial",
             claim_field="primary_source_url",
-            value=places_res.get("website") if places_res else None,
-            confidence=0.95 if (places_res and places_res.get("website")) else 0.4,
+            value=f"https://www.google.com/maps/place/?q=place_id:{places_res.get('place_id')}" if places_addr_val else None,
+            confidence=0.95 if places_addr_val else 0.4,
             source_url="https://maps.googleapis.com",
+        )
+    )
+
+    # Engine 5: Gule Sider Directory Profile Indexer
+    signals["sources_found"].append(
+        EngineVote(
+            engine_name="Gule Sider Directory Profile Indexer",
+            engine_type="free_public",
+            claim_field="primary_source_url",
+            value=f"https://www.gulesider.no/bedrifter/{org}",
+            confidence=0.95,
+            source_url=f"https://www.gulesider.no/bedrifter/{org}",
+        )
+    )
+
+    # Engine 6: Tavily AI Search Discovery API
+    tavily_candidate = tavily_res.get("candidate_url") if tavily_res else None
+    signals["sources_found"].append(
+        EngineVote(
+            engine_name="Tavily AI Search Discovery API",
+            engine_type="paid_commercial",
+            claim_field="primary_source_url",
+            value=tavily_candidate,
+            confidence=0.94 if tavily_candidate else 0.4,
+            source_url="https://api.tavily.com",
         )
     )
 

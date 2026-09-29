@@ -56,9 +56,12 @@ from norway_company_agent.live_connectors import (
     extract_official_workforce,
     extract_website_signals,
     fetch_brave_search,
+    fetch_brreg_kunngjoringer,
     fetch_google_news_rss,
     fetch_google_places,
+    fetch_gulesider_directory,
     fetch_nav_jobs,
+    fetch_tavily_search,
 )
 from norway_company_agent.official import fetch_official_modules
 from norway_company_agent.research import answer_profile
@@ -175,6 +178,17 @@ class BudgetCircuitBreaker:
     def record_spend(self, amount: float) -> None:
         with self._lock:
             self._spent_usd += amount
+
+    def try_spend(self, amount: float) -> bool:
+        """Atomic check-and-reserve: prevents TOCTOU race between can_spend and record_spend."""
+        with self._lock:
+            if self._spent_usd + amount >= self.hard_limit_usd:
+                if not self.tripped:
+                    self.tripped = True
+                    print(f"\n[BUDGET CIRCUIT BREAKER] Hard cap reached (${self._spent_usd:.4f} >= ${self.hard_limit_usd:.2f}). Safe fallback to free official APIs engaged.")
+                return False
+            self._spent_usd += amount
+            return True
 
     @property
     def total_spent(self) -> float:
@@ -302,6 +316,36 @@ def main() -> None:
                         "retrieved_at": utc_now(),
                     }
 
+            # 7. Brønnøysund Kunngjøringer Official Gazette API (100% Free)
+            kunng_obs, kunng_cost = fetch_brreg_kunngjoringer(profile)
+            observations.extend(kunng_obs)
+            p_cost += kunng_cost
+            ext_requests += 1
+
+            # 8. Gule Sider Official Business Directory (100% Free)
+            gule_obs, gule_cost = fetch_gulesider_directory(profile)
+            observations.extend(gule_obs)
+            p_cost += gule_cost
+            ext_requests += 1
+
+            # 9. Tavily AI Search API (Paid via TAVILY_API_KEY)
+            tavily_res = None
+            tavily_key = os.getenv("TAVILY_API_KEY", "").strip()
+            if tavily_key and budget_guard.can_spend(0.001):
+                tavily_res, tavily_cost = fetch_tavily_search(profile, tavily_key)
+                if tavily_cost > 0:
+                    budget_guard.record_spend(tavily_cost)
+                p_cost += tavily_cost
+                ext_requests += 1
+                if tavily_res:
+                    profile["evidence"]["tavily_search"] = {
+                        "field": "tavily_search",
+                        "status": "available",
+                        "value": tavily_res,
+                        "source_url": "https://api.tavily.com",
+                        "retrieved_at": utc_now(),
+                    }
+
             # Summarize footprint
             footprint_summary = aggregate_footprint(observations)
             profile["evidence"]["external_footprint"] = {
@@ -323,6 +367,7 @@ def main() -> None:
                 p_cost=p_cost,
                 brave_res=profile.get("evidence", {}).get("brave_search", {}).get("value"),
                 places_res=profile.get("evidence", {}).get("places", {}).get("value"),
+                tavily_res=profile.get("evidence", {}).get("tavily_search", {}).get("value"),
             )
             consensus_summary = arbitrate_company_profile(profile, engine_signals)
             profile["evidence"]["consensus_verification"] = {
