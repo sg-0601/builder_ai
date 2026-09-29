@@ -31,6 +31,12 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT))
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv(ROOT / ".env")
+except ImportError:
+    pass
+
 from norway_company_agent.batch import (
     evidence_terminal_state,
     profile_complete_for_modules,
