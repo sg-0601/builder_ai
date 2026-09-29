@@ -1,12 +1,12 @@
 {
   "run_id": "signalpost-run-001",
-  "started_at": "2026-09-29T15:06:21.861495Z",
-  "completed_at": "2026-09-29T15:09:19.757305Z",
-  "total_elapsed_ms": 177895,
-  "expected_count": 100,
-  "emitted_envelopes": 100,
+  "started_at": "2026-09-29T15:05:07.282895Z",
+  "completed_at": "2026-09-29T15:05:53.378983Z",
+  "total_elapsed_ms": 46096,
+  "expected_count": 10,
+  "emitted_envelopes": 10,
   "resumed_profiles": 0,
-  "profiles_fetched_this_run": 100,
+  "profiles_fetched_this_run": 10,
   "modules": [
     "registry",
     "accounting_obligation",
@@ -19,16 +19,16 @@
   ],
   "registry": {
     "registry_snapshot_sha256": "b82d6a3e7231d1759a958c282bc4366b80ec2fab8095053d8ed7fa9cd01bc838",
-    "registry_rows_scanned": 409260,
-    "requested": 100,
-    "selected": 100
+    "registry_rows_scanned": 403672,
+    "requested": 10,
+    "selected": 10
   },
   "operations": {
-    "requests": 732,
-    "bytes": 900753,
-    "p50_ms": 1372,
-    "p95_ms": 3436,
-    "total_elapsed_ms": 177895,
+    "requests": 76,
+    "bytes": 82228,
+    "p50_ms": 1413,
+    "p95_ms": 5884,
+    "total_elapsed_ms": 46096,
     "third_party_cost_usd": 0.0
   },
   "validation": {

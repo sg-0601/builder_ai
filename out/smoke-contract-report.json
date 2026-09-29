@@ -1,12 +1,12 @@
 {
-  "run_id": "contract-100",
-  "started_at": "2026-09-29T14:42:47.698309Z",
-  "completed_at": "2026-09-29T14:42:49.410042Z",
-  "total_elapsed_ms": 1711,
+  "run_id": "signalpost-run-001",
+  "started_at": "2026-09-29T15:11:38.241612Z",
+  "completed_at": "2026-09-29T15:14:27.281922Z",
+  "total_elapsed_ms": 169040,
   "expected_count": 100,
   "emitted_envelopes": 100,
-  "resumed_profiles": 100,
-  "profiles_fetched_this_run": 0,
+  "resumed_profiles": 0,
+  "profiles_fetched_this_run": 100,
   "modules": [
     "registry",
     "accounting_obligation",
@@ -24,11 +24,11 @@
     "selected": 100
   },
   "operations": {
-    "requests": 0,
-    "bytes": 0,
-    "p50_ms": null,
-    "p95_ms": null,
-    "total_elapsed_ms": 1711,
+    "requests": 732,
+    "bytes": 900753,
+    "p50_ms": 1367,
+    "p95_ms": 1817,
+    "total_elapsed_ms": 169040,
     "third_party_cost_usd": 0.0
   },
   "validation": {

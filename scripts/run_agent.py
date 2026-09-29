@@ -42,6 +42,14 @@ from norway_company_agent.batch import (
 from norway_company_agent.evidence import evidence, utc_now
 from norway_company_agent.external_footprint import aggregate_footprint, publishable_observation
 from norway_company_agent.identity import apply_website_identity_gate
+from norway_company_agent.live_connectors import (
+    extract_official_workforce,
+    extract_website_signals,
+    fetch_brave_search,
+    fetch_google_news_rss,
+    fetch_google_places,
+    fetch_nav_jobs,
+)
 from norway_company_agent.official import fetch_official_modules
 from norway_company_agent.research import answer_profile
 from norway_company_agent.website import fetch_website
@@ -56,61 +64,6 @@ def write_jsonl(path: Path, rows: list[dict]) -> None:
         for row in rows:
             handle.write(json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n")
     temporary.replace(path)
-
-
-def fetch_google_news_rss(profile: dict, limit: int = 3) -> list[dict]:
-    """Fetch dated Norwegian news mentions with strict title-matching."""
-    org = str(profile["organisation_number"])
-    name = str(profile.get("name") or "")
-    if not name:
-        return []
-
-    # Clean name tokens
-    tokens = [t for t in re.findall(r"[a-z0-9æøå]+", name.casefold()) if t not in {"as", "asa", "da", "ans", "enk", "nuf"}]
-    if not tokens:
-        return []
-
-    query = urllib.parse.quote(f'"{name}" when:2y')
-    url = f"https://news.google.com/rss/search?q={query}&hl=no&gl=NO&ceid=NO:no"
-    try:
-        req = urllib.request.Request(url, headers={"User-Agent": UA_HEADER, "Accept": "application/rss+xml"})
-        with urllib.request.urlopen(req, timeout=8.0) as resp:
-            raw = resp.read(500_000)
-        root = ET.fromstring(raw)
-        retrieved_at = utc_now()
-        output = []
-        for item in root.findall(".//item")[:limit]:
-            title = str(item.findtext("title") or "").strip()
-            link = str(item.findtext("link") or "").strip()
-            publisher = str(item.findtext("source") or "").strip()
-            if not link or not title:
-                continue
-
-            # Strict title check: company name must appear in title
-            title_lower = title.casefold()
-            if not all(token in title_lower for token in tokens):
-                continue
-
-            digest = hashlib.sha256(raw + title.encode("utf-8")).hexdigest()
-            output.append({
-                "id": "news-" + hashlib.sha256(f"{org}|{title}|{publisher}".encode()).hexdigest()[:24],
-                "organisation_number": org,
-                "platform": "news",
-                "signal_type": "public_mention",
-                "source_url": link,
-                "retrieved_at": retrieved_at,
-                "content_sha256": digest,
-                "exact_entity": True,
-                "identity_proof": [{"type": "exact_legal_name_in_news_title", "value": name}],
-                "acquisition_mode": "permitted_public_page",
-                "rights_status": "approved",
-                "source_class": "public_news",
-                "evidence_span": title,
-                "strategy": "independent_news_discovery",
-            })
-        return output
-    except Exception:
-        return []
 
 
 def to_output_contract_envelope(
@@ -183,7 +136,7 @@ def to_output_contract_envelope(
         "operations": {
             "requests": int(operations.get("requests", 0)),
             "runtime_ms": int(operations.get("runtime_ms", 0)),
-            "third_party_cost_usd": 0.0,
+            "third_party_cost_usd": float(operations.get("third_party_cost_usd", 0.0)),
         },
     }
 
@@ -202,6 +155,8 @@ def main() -> None:
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--contract-format", action="store_true", help="Emit minimal OUTPUT_CONTRACT.md format")
     parser.add_argument("--enrich-external", action="store_true", default=True, help="Enrich with external footprint")
+    parser.add_argument("--brave-api-key", default=os.getenv("BRAVE_API_KEY"), help="Optional Brave Search API Key")
+    parser.add_argument("--google-places-key", default=os.getenv("GOOGLE_PLACES_API_KEY"), help="Optional Google Places API Key")
     parser.add_argument("--modules", default="registry,accounting_obligation,registry_live,financials,roles,group,locations,website")
     args = parser.parse_args()
 
@@ -239,12 +194,59 @@ def main() -> None:
             website_record, website_metrics = fetch_website(profile.get("website"))
             profile["evidence"]["website"] = apply_website_identity_gate(profile, website_record)["website"]
 
-        # External Footprint Enrichment
+        # External Footprint Enrichment (Live Tools & APIs)
         observations = []
+        p_cost = 0.0
+        ext_requests = 0
+
         if args.enrich_external:
-            # Google News RSS mentions
-            news_items = fetch_google_news_rss(profile, limit=2)
-            observations.extend(news_items)
+            # 1. Official Brreg Workforce Extraction
+            wf_obs = extract_official_workforce(profile)
+            observations.extend(wf_obs)
+
+            # 2. Company-Controlled Website Signals
+            web_obs = extract_website_signals(profile)
+            observations.extend(web_obs)
+
+            # 3. NAV Arbeidsplassen Live Official Employment API
+            nav_obs, nav_cost = fetch_nav_jobs(profile)
+            observations.extend(nav_obs)
+            p_cost += nav_cost
+            ext_requests += 1
+
+            # 4. Google News RSS Live Syndication with Sentiment
+            news_obs, news_cost = fetch_google_news_rss(profile, limit=2)
+            observations.extend(news_obs)
+            p_cost += news_cost
+            ext_requests += 1
+
+            # 5. Brave Search API (Paid / Free Tier via BRAVE_API_KEY)
+            if args.brave_api_key and profile.get("evidence", {}).get("website", {}).get("status") != "available":
+                brave_res, brave_cost = fetch_brave_search(profile, args.brave_api_key)
+                p_cost += brave_cost
+                ext_requests += 1
+                if brave_res:
+                    profile["evidence"]["brave_search"] = {
+                        "field": "brave_search",
+                        "status": "available",
+                        "value": brave_res,
+                        "source_url": "https://api.search.brave.com",
+                        "retrieved_at": utc_now(),
+                    }
+
+            # 6. Google Places API (Paid via GOOGLE_PLACES_API_KEY)
+            if args.google_places_key:
+                places_res, places_cost = fetch_google_places(profile, args.google_places_key)
+                p_cost += places_cost
+                ext_requests += 1
+                if places_res:
+                    profile["evidence"]["places"] = {
+                        "field": "places",
+                        "status": "available",
+                        "value": places_res,
+                        "source_url": "https://maps.googleapis.com",
+                        "retrieved_at": utc_now(),
+                    }
 
             # Summarize footprint
             footprint_summary = aggregate_footprint(observations)
@@ -252,18 +254,20 @@ def main() -> None:
                 "field": "external_footprint",
                 "status": footprint_summary["status"],
                 "value": footprint_summary,
+                "observations": observations,
                 "retrieved_at": utc_now(),
                 "source_class": "multi_source_external",
-                "source_url": "https://news.google.com/rss",
+                "source_url": "https://builderr.ai/external-footprint",
                 "content_sha256": hashlib.sha256(json.dumps(footprint_summary, sort_keys=True).encode()).hexdigest(),
             }
 
         p_elapsed_ms = int((time.monotonic() - p_start) * 1000)
         metric = {
-            "requests": len(metrics) + website_metrics["requests"] + (1 if args.enrich_external else 0),
+            "requests": len(metrics) + website_metrics["requests"] + ext_requests,
             "bytes": sum(item.bytes_received for item in metrics) + website_metrics["bytes"],
             "latencies_ms": [item.elapsed_ms for item in metrics] + website_metrics["latencies_ms"],
             "runtime_ms": p_elapsed_ms,
+            "third_party_cost_usd": p_cost,
         }
         profile["run_metrics"] = metric
         return profile, metric
@@ -341,6 +345,8 @@ def main() -> None:
     p50_ms = latencies[len(latencies) // 2] if latencies else None
     p95_ms = latencies[min(len(latencies) - 1, int(len(latencies) * 0.95))] if latencies else None
 
+    total_third_party_cost = round(sum(p.get("run_metrics", {}).get("third_party_cost_usd", 0.0) for p in ordered_profiles), 4)
+
     report = {
         "run_id": args.run_id,
         "started_at": started_at,
@@ -358,7 +364,7 @@ def main() -> None:
             "p50_ms": p50_ms,
             "p95_ms": p95_ms,
             "total_elapsed_ms": total_elapsed_ms,
-            "third_party_cost_usd": 0.0,
+            "third_party_cost_usd": total_third_party_cost,
         },
         "validation": validation,
     }
@@ -368,7 +374,7 @@ def main() -> None:
     print(f"\nRun complete! Emitted {len(envelopes)} envelopes. Report saved to {args.report}")
     print(f"Validation: {'PASSED' if validation['passed'] else 'FAILED'}")
     print(f"P95 Latency: {p95_ms} ms (Budget <= 10,000 ms)")
-    print(f"Third-Party Cost: $0.00")
+    print(f"Third-Party Cost: ${total_third_party_cost:.4f}")
 
 
 if __name__ == "__main__":
