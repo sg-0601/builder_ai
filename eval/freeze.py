@@ -52,7 +52,14 @@ def compute_file_hash(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def generate_freeze_manifest() -> dict[str, Any]:
+def compute_manifest_seal(manifest: dict[str, Any]) -> str:
+    """Computes SHA-256 seal of the manifest payload (excluding the seal itself)."""
+    payload = {k: v for k, v in manifest.items() if k != "integrity_seal_sha256"}
+    raw_bytes = json.dumps(payload, sort_keys=True).encode("utf-8")
+    return hashlib.sha256(raw_bytes).hexdigest()
+
+
+def generate_freeze_manifest(frozen_at: str | None = None) -> dict[str, Any]:
     """Generates the frozen submission manifest."""
     council = LLMCouncil()
 
@@ -61,7 +68,7 @@ def generate_freeze_manifest() -> dict[str, Any]:
     code_state = {
         "git_commit": get_git_commit(),
         "pyproject_sha256": compute_file_hash(pyproject_path),
-        "frozen_at": datetime.now(timezone.utc).isoformat(),
+        "frozen_at": frozen_at or datetime.now(timezone.utc).isoformat(),
     }
 
     # 2. Strategy Versions and Routing Table
@@ -143,11 +150,51 @@ def generate_freeze_manifest() -> dict[str, Any]:
         "source_allowlist": source_allowlist,
     }
 
-    # Cryptographic integrity seal
-    manifest_bytes = json.dumps(manifest, sort_keys=True).encode("utf-8")
-    manifest["integrity_seal_sha256"] = hashlib.sha256(manifest_bytes).hexdigest()
-
+    manifest["integrity_seal_sha256"] = compute_manifest_seal(manifest)
     return manifest
+
+
+def verify_freeze_manifest(manifest_path: Path) -> tuple[bool, list[str]]:
+    """Verifies existing freeze manifest against current system state."""
+    if not manifest_path.exists():
+        return False, [f"Manifest file not found: {manifest_path}"]
+
+    try:
+        existing = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except Exception as e:
+        return False, [f"Failed to parse manifest JSON: {e}"]
+
+    # 1. Verify cryptographic seal integrity
+    expected_seal = compute_manifest_seal(existing)
+    recorded_seal = existing.get("integrity_seal_sha256")
+    if expected_seal != recorded_seal:
+        return False, ["Cryptographic integrity seal mismatch: Manifest file has been tampered with!"]
+
+    # 2. Compare system configuration (strategies, routing, models, gates, allowlists)
+    current = generate_freeze_manifest(frozen_at=existing.get("code_state", {}).get("frozen_at"))
+    diffs = []
+
+    # Check code state
+    if existing.get("code_state", {}).get("pyproject_sha256") != current.get("code_state", {}).get("pyproject_sha256"):
+        diffs.append("Dependencies changed (pyproject.toml modified)")
+
+    # Check strategies and routing table
+    if existing.get("routing_table") != current.get("routing_table"):
+        diffs.append("Routing table or strategy registry modified")
+
+    # Check models and prompts
+    if existing.get("models") != current.get("models"):
+        diffs.append("Model configurations or active keys modified")
+
+    # Check publication gates
+    if existing.get("publication_gates") != current.get("publication_gates"):
+        diffs.append("Publication gates or thresholds modified")
+
+    # Check source allowlist
+    if existing.get("source_allowlist") != current.get("source_allowlist"):
+        diffs.append("Source allowlist or budgets modified")
+
+    return (len(diffs) == 0), diffs
 
 
 def save_freeze_manifest(output_path: Path | None = None) -> Path:
@@ -163,18 +210,17 @@ def main() -> None:
     parser.add_argument("--verify", action="store_true", help="Verify existing freeze manifest against current system")
     args = parser.parse_args()
 
-    out_path = Path(args.output)
+    out_path = ROOT / args.output if not Path(args.output).is_absolute() else Path(args.output)
     if args.verify:
-        if not out_path.exists():
-            print(f"[!] Freeze manifest not found at: {out_path}")
-            return
-        current = generate_freeze_manifest()
-        existing = json.loads(out_path.read_text(encoding="utf-8"))
-        # Verify integrity
-        if existing.get("integrity_seal_sha256") == current.get("integrity_seal_sha256"):
+        passed, diffs = verify_freeze_manifest(out_path)
+        if passed:
             print("[OK] Freeze manifest is INTACT and matches current system configuration.")
         else:
-            print("[!] Freeze manifest DIFFERENCE detected! System has mutated since last freeze.")
+            print("[!] Freeze manifest DIFFERENCE detected! System has mutated since last freeze:")
+            for d in diffs:
+                print(f"    - {d}")
+            print("\nTo update the freeze manifest with your latest changes, run:")
+            print("    python -m eval.freeze")
     else:
         saved_path = save_freeze_manifest(out_path)
         print(f"[OK] Signalpost Daily Evaluation Freeze Manifest generated and saved to: {saved_path}")
