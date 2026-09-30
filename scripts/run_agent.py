@@ -61,6 +61,7 @@ from norway_company_agent.live_connectors import (
     fetch_google_news_rss,
     fetch_google_places,
     fetch_gulesider_directory,
+    fetch_linkedin_guest_jobs,
     fetch_nav_jobs,
     fetch_tavily_search,
 )
@@ -270,6 +271,14 @@ def main() -> None:
             observations.extend(nav_obs)
             p_cost += nav_cost
             ext_requests += 1
+
+            # 3b. LinkedIn Public Guest Jobs (100% Free Public Fallback)
+            if not nav_obs:
+                li_obs, li_cost = fetch_linkedin_guest_jobs(profile, limit=2)
+                observations.extend(li_obs)
+                p_cost += li_cost
+                if li_obs:
+                    ext_requests += 1
 
             # 4. Google News RSS Live Syndication with Sentiment
             news_obs, news_cost = fetch_google_news_rss(profile, limit=2)

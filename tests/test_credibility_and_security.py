@@ -12,6 +12,7 @@ sys.path.insert(0, str(ROOT))
 import pytest
 from norway_company_agent.live_connectors import (
     fetch_fagfolkguiden_reviews,
+    fetch_linkedin_guest_jobs,
     slugify_norwegian_name,
 )
 from norway_company_agent.news_credibility import (
@@ -158,3 +159,47 @@ def test_fagfolkguiden_reviews_mock():
     assert rev["metrics"]["rating"] == 4.8
     assert rev["metrics"]["review_count"] == 19
     assert rev["metrics"]["google_review_url"] == "https://search.google.com/local/reviews?placeid=ChIJ123"
+
+
+# =============================================================================
+# 4. LinkedIn Logged-Out Guest Jobs Connector Tests
+# =============================================================================
+def test_linkedin_guest_jobs_mock():
+    mock_typeahead = json.dumps([
+        {"id": "123456", "type": "COMPANY", "displayName": "Nordic Solutions AS"}
+    ]).encode("utf-8")
+
+    mock_html = b"""
+    <html>
+      <body>
+        <div class="base-search-card">
+          <h3 class="base-search-card__title">Senior Cloud Architect</h3>
+          <h4 class="base-search-card__subtitle">Nordic Solutions AS</h4>
+          <span class="job-search-card__location">Oslo, Norway</span>
+          <a class="base-card__full-link" href="https://www.linkedin.com/jobs/view/123456789?refId=xyz"></a>
+        </div>
+      </body>
+    </html>
+    """
+
+    resp1 = MagicMock()
+    resp1.read.return_value = mock_typeahead
+    resp1.__enter__.return_value = resp1
+
+    resp2 = MagicMock()
+    resp2.read.return_value = mock_html
+    resp2.__enter__.return_value = resp2
+
+    with patch("urllib.request.urlopen", side_effect=[resp1, resp2]):
+        profile = {"organisation_number": "912345678", "name": "Nordic Solutions AS"}
+        obs, cost = fetch_linkedin_guest_jobs(profile)
+
+    assert cost == 0.0
+    assert len(obs) == 1
+    job = obs[0]
+    assert job["signal_type"] == "job_posting"
+    assert job["platform"] == "job_board"
+    assert job["metrics"]["job_title"] == "Senior Cloud Architect"
+    assert job["metrics"]["employer"] == "Nordic Solutions AS"
+    assert job["metrics"]["linkedin_company_id"] == "123456"
+
