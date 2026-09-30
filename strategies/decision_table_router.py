@@ -53,8 +53,16 @@ class DecisionTableRouterStrategy(BaseStrategy):
             attempt.rejected_claims.extend(static_att.rejected_claims)
             attempt.exact_identity_evidence.extend(static_att.exact_identity_evidence)
 
+            # Extract full homepage content if static probe succeeded
+            hp_att = self.static_homepage.execute(company)
+            attempt.requested_urls.extend(hp_att.requested_urls)
+            attempt.raw_snapshot_hashes.extend(hp_att.raw_snapshot_hashes)
+            attempt.request_count += hp_att.request_count
+            attempt.claims.extend(hp_att.claims)
+            attempt.accepted_claims.extend(hp_att.accepted_claims)
+            attempt.rejected_claims.extend(hp_att.rejected_claims)
+
             # Step 2: JavaScript Shell Test
-            # If static website succeeded, check if it requires browser rendering fallback
             routing_steps.append("step_2_javascript_shell_test")
             browser_att = self.browser_fallback.execute(company)
             attempt.requested_urls.extend(browser_att.requested_urls)
@@ -77,22 +85,9 @@ class DecisionTableRouterStrategy(BaseStrategy):
             else:
                 routing_steps.append("step_2c_static_html_confirmed_complete")
 
-        # Branch B: No website or static failed -> PDF layout parsing / Search fallback
+        # Branch B: No website declared -> Search candidates discovery fallback
         else:
             routing_steps.append("step_1b_no_website_declared")
-
-            # Try PDF layout parsing for official annual accounts
-            routing_steps.append("step_3_pdf_annual_accounts_fallback")
-            pdf_att = self.pdf_fallback.execute(company)
-            attempt.requested_urls.extend(pdf_att.requested_urls)
-            attempt.raw_snapshot_hashes.extend(pdf_att.raw_snapshot_hashes)
-            attempt.request_count += pdf_att.request_count
-            attempt.cost_usd += pdf_att.cost_usd
-            attempt.claims.extend(pdf_att.claims)
-            attempt.accepted_claims.extend(pdf_att.accepted_claims)
-            attempt.rejected_claims.extend(pdf_att.rejected_claims)
-
-            # Try search candidates discovery
             routing_steps.append("step_4_search_candidates_discovery")
             search_att = self.search_candidates.execute(company)
             attempt.requested_urls.extend(search_att.requested_urls)
@@ -103,6 +98,17 @@ class DecisionTableRouterStrategy(BaseStrategy):
             attempt.accepted_claims.extend(search_att.accepted_claims)
             attempt.rejected_claims.extend(search_att.rejected_claims)
             attempt.exact_identity_evidence.extend(search_att.exact_identity_evidence)
+
+        # Official annual accounts fallback (available for all registered entities)
+        routing_steps.append("step_3_pdf_annual_accounts_fallback")
+        pdf_att = self.pdf_fallback.execute(company)
+        attempt.requested_urls.extend(pdf_att.requested_urls)
+        attempt.raw_snapshot_hashes.extend(pdf_att.raw_snapshot_hashes)
+        attempt.request_count += pdf_att.request_count
+        attempt.cost_usd += pdf_att.cost_usd
+        attempt.claims.extend(pdf_att.claims)
+        attempt.accepted_claims.extend(pdf_att.accepted_claims)
+        attempt.rejected_claims.extend(pdf_att.rejected_claims)
 
         # Record Decision Table routing provenance
         attempt.exact_identity_evidence.append({

@@ -23,7 +23,7 @@ class PdfFallbackStrategy(BaseStrategy):
         latest_year = str(company.get("latest_submitted_accounts") or "")
 
         # Official Brreg Regnskapsregisteret API endpoint
-        url = f"https://data.brreg.no/regnskapsregisteret/regnskap/selskap/{org}/aarsregnskap"
+        url = f"https://data.brreg.no/regnskapsregisteret/regnskap/{org}"
         attempt.requested_urls.append(url)
         attempt.request_count += 1
 
