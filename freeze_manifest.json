@@ -1,0 +1,254 @@
+{
+  "freeze_version": "1.0.0",
+  "code_state": {
+    "git_commit": "b4c7eeaeab7ec26fc683cf66e23a49abd67b1549",
+    "pyproject_sha256": "f6fbc564c40ecbd88f066a8222a9dc1468312a48759fd49c6cdd30a414407c70",
+    "frozen_at": "2026-09-30T00:52:59.915960+00:00"
+  },
+  "routing_table": {
+    "default_baseline": "registry_site_v1",
+    "default_challenger": "browser_fallback_v2",
+    "routing_policy": "decision_table",
+    "decision_table_order": [
+      "1. static HTML first (registry_site / static_homepage_crawl)",
+      "2. browser rendering only after a JavaScript-shell test confirms need",
+      "3. PDF layout parsing / annual accounts when plain text fails",
+      "4. search provider discovery when official website is unlisted"
+    ],
+    "registered_strategies": {
+      "browser_fallback": {
+        "name": "browser_fallback",
+        "version": "1.0.0",
+        "class": "BrowserFallbackV1Strategy"
+      },
+      "browser_fallback_v1": {
+        "name": "browser_fallback",
+        "version": "1.0.0",
+        "class": "BrowserFallbackV1Strategy"
+      },
+      "browser_fallback_v2": {
+        "name": "browser_fallback_v2",
+        "version": "2.0.0",
+        "class": "BrowserFallbackV2Strategy"
+      },
+      "browser_fallback_v2_v2": {
+        "name": "browser_fallback_v2",
+        "version": "2.0.0",
+        "class": "BrowserFallbackV2Strategy"
+      },
+      "decision_table_router": {
+        "name": "decision_table_router",
+        "version": "1.0.0",
+        "class": "DecisionTableRouterStrategy"
+      },
+      "decision_table_router_v1": {
+        "name": "decision_table_router",
+        "version": "1.0.0",
+        "class": "DecisionTableRouterStrategy"
+      },
+      "jsonld_opengraph": {
+        "name": "jsonld_opengraph",
+        "version": "1.0.0",
+        "class": "JsonLdOpenGraphStrategy"
+      },
+      "jsonld_opengraph_v1": {
+        "name": "jsonld_opengraph",
+        "version": "1.0.0",
+        "class": "JsonLdOpenGraphStrategy"
+      },
+      "leader_founder_bridge": {
+        "name": "leader_founder_bridge",
+        "version": "1.0.0",
+        "class": "LeaderFounderBridgeStrategy"
+      },
+      "leader_founder_bridge_v1": {
+        "name": "leader_founder_bridge",
+        "version": "1.0.0",
+        "class": "LeaderFounderBridgeStrategy"
+      },
+      "pdf_fallback": {
+        "name": "pdf_fallback",
+        "version": "1.0.0",
+        "class": "PdfFallbackStrategy"
+      },
+      "pdf_fallback_v1": {
+        "name": "pdf_fallback",
+        "version": "1.0.0",
+        "class": "PdfFallbackStrategy"
+      },
+      "registry_site": {
+        "name": "registry_site",
+        "version": "1.0.0",
+        "class": "RegistrySiteStrategy"
+      },
+      "registry_site_v1": {
+        "name": "registry_site",
+        "version": "1.0.0",
+        "class": "RegistrySiteStrategy"
+      },
+      "search_candidates": {
+        "name": "search_candidates",
+        "version": "1.0.0",
+        "class": "SearchCandidatesStrategy"
+      },
+      "search_candidates_v1": {
+        "name": "search_candidates",
+        "version": "1.0.0",
+        "class": "SearchCandidatesStrategy"
+      },
+      "sitemap_static": {
+        "name": "sitemap_static",
+        "version": "1.0.0",
+        "class": "SitemapStaticStrategy"
+      },
+      "sitemap_static_v1": {
+        "name": "sitemap_static",
+        "version": "1.0.0",
+        "class": "SitemapStaticStrategy"
+      },
+      "static_homepage_crawl": {
+        "name": "static_homepage_crawl",
+        "version": "1.0.0",
+        "class": "StaticHomepageStrategy"
+      },
+      "static_homepage_crawl_v1": {
+        "name": "static_homepage_crawl",
+        "version": "1.0.0",
+        "class": "StaticHomepageStrategy"
+      },
+      "targeted_paths": {
+        "name": "targeted_paths",
+        "version": "1.0.0",
+        "class": "TargetedPathsStrategy"
+      },
+      "targeted_paths_v1": {
+        "name": "targeted_paths",
+        "version": "1.0.0",
+        "class": "TargetedPathsStrategy"
+      }
+    }
+  },
+  "models": [
+    {
+      "name": "Google Gemini Flash Lite",
+      "provider": "gemini",
+      "tier": "free_tier",
+      "model_name": "gemini-flash-lite-latest",
+      "active": false
+    },
+    {
+      "name": "Groq Llama / Qwen",
+      "provider": "groq",
+      "tier": "free_tier",
+      "model_name": "qwen/qwen3.8-27b",
+      "active": false
+    },
+    {
+      "name": "Hugging Face Llama 3.1",
+      "provider": "huggingface",
+      "tier": "free_tier",
+      "model_name": "meta-llama/Llama-3.1-8B-Instruct",
+      "active": false
+    },
+    {
+      "name": "Local NorBERT Neural Arbiter",
+      "provider": "local_norbert",
+      "tier": "local_neural",
+      "model_name": "NOSIBLE/financial-sentiment-v1.2-base",
+      "active": true
+    },
+    {
+      "name": "Anthropic Claude 3.5 Sonnet",
+      "provider": "claude",
+      "tier": "paid_tier",
+      "model_name": "claude-3-5-haiku-20241022",
+      "active": false
+    },
+    {
+      "name": "OpenAI GPT-4o-mini",
+      "provider": "openai",
+      "tier": "paid_tier",
+      "model_name": "gpt-4o-mini",
+      "active": false
+    },
+    {
+      "name": "Mistral Small AI",
+      "provider": "mistral",
+      "tier": "paid_tier",
+      "model_name": "mistral-small-latest",
+      "active": false
+    },
+    {
+      "name": "Perplexity Sonar",
+      "provider": "perplexity",
+      "tier": "paid_tier",
+      "model_name": "sonar",
+      "active": false
+    },
+    {
+      "name": "Cohere Command R+",
+      "provider": "cohere",
+      "tier": "paid_tier",
+      "model_name": "command-r-plus-08-2024",
+      "active": false
+    },
+    {
+      "name": "DeepSeek V3",
+      "provider": "deepseek",
+      "tier": "paid_tier",
+      "model_name": "deepseek-chat",
+      "active": false
+    }
+  ],
+  "publication_gates": {
+    "wrong_company_tolerance": 0,
+    "min_claim_precision": 0.95,
+    "evidence_completeness_target": 1.0,
+    "evidence_completeness_min": 0.95,
+    "max_runtime_per_company_ms": 10000,
+    "max_p95_batch_latency_ms": 10000,
+    "max_cost_per_company_usd": 0.05,
+    "max_cumulative_batch_budget_usd": 8.5
+  },
+  "source_allowlist": {
+    "allowed_official_sources": [
+      "https://data.brreg.no/enhetsregisteret/api/enheter",
+      "https://data.brreg.no/regnskapsregisteret/regnskap",
+      "https://arbeidsplassen.nav.no/stillinger/api",
+      "https://news.google.com/rss",
+      "https://www.gulesider.no/bedrifter"
+    ],
+    "allowed_commercial_sources": [
+      "https://api.search.brave.com",
+      "https://maps.googleapis.com",
+      "https://places.googleapis.com",
+      "https://api.tavily.com"
+    ],
+    "blocked_discovery_hosts": [
+      "1881.no",
+      "companywall.no",
+      "facebook.com",
+      "firmadatabasen.no",
+      "firmalisten.no",
+      "gulesider.no",
+      "instagram.com",
+      "linkedin.com",
+      "nor47business.com",
+      "northdata.com",
+      "proff.no",
+      "purehelp.no",
+      "sokfirma.no",
+      "tiktok.com",
+      "twitter.com",
+      "x.com",
+      "youtube.com",
+      "yra.no"
+    ],
+    "budget_limits": {
+      "max_requests_per_company": 12,
+      "max_bytes_per_request": 2000000,
+      "robots_txt_obeyed": true
+    }
+  },
+  "integrity_seal_sha256": "806b8835bf93ae0b9e08c3e5aac566f445431584ce95ceee2764be61b67f4428"
+}

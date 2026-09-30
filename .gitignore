@@ -13,4 +13,7 @@ reports/*.json
 !snapshots/.gitkeep
 !claims/.gitkeep
 !reports/.gitkeep
+out/*.jsonl
+out/*.json
+*.log
 

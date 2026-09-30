@@ -11,6 +11,7 @@ from strategies.base import StrategyAttempt
 def score_strategy_attempts(
     attempts: list[StrategyAttempt],
     gold_data: dict[str, dict[str, Any]],
+    refresh_ground_truth: dict[str, list[dict[str, Any]]] | None = None,
 ) -> dict[str, Any]:
     """Scores a batch of StrategyAttempts against gold companies in strict order:
     
@@ -29,6 +30,7 @@ def score_strategy_attempts(
             "claim_precision": 0.0,
             "evidence_validity": 0.0,
             "coverage_recall": 0.0,
+            "refresh_correctness": 1.0,
             "mean_runtime_ms": 0,
             "mean_request_count": 0.0,
             "total_cost_usd": 0.0,
@@ -57,11 +59,11 @@ def score_strategy_attempts(
         for c in att.accepted_claims:
             total_accepted_claims += 1
 
-            # Evidence validity check (span non-empty and hash valid)
+            # 3. Evidence validity check (span non-empty and hash valid)
             if c.evidence_span and len(str(c.content_hash or "")) == 64:
                 valid_evidence_claims += 1
 
-            # Precision check
+            # 2. Precision check
             if c.field == "website":
                 extracted_url = str(c.value or "").lower()
                 if expected_domain:
@@ -79,7 +81,7 @@ def score_strategy_attempts(
                         correct_accepted_claims += 1
                         total_useful_fields += 1
             else:
-                # Other useful fields (contact, pages, title, accounts)
+                # Other useful fields (contact, pages, title, accounts, leadership, etc.)
                 correct_accepted_claims += 1
                 total_useful_fields += 1
 
@@ -90,12 +92,41 @@ def score_strategy_attempts(
     mean_requests = round(total_requests / total_companies, 2)
     total_cost = round(total_cost, 4)
 
+    # 5. Refresh correctness: real changes found without false changes
+    refresh_correctness = 1.0
+    if refresh_ground_truth:
+        true_positives = 0
+        false_positives = 0
+        false_negatives = 0
+        for att in attempts:
+            org = att.organisation_number
+            expected_changes = refresh_ground_truth.get(org, [])
+            # Search for detected changes in attempt
+            detected_changes = [c.to_dict() for c in att.accepted_claims if "change" in c.field or "refresh" in c.field]
+            if not expected_changes and not detected_changes:
+                true_positives += 1
+            else:
+                # Compare detected vs expected
+                det_fields = {c.get("field") for c in detected_changes}
+                exp_fields = {c.get("field") for c in expected_changes}
+                true_positives += len(det_fields & exp_fields)
+                false_positives += len(det_fields - exp_fields)
+                false_negatives += len(exp_fields - det_fields)
+        total_eval = true_positives + false_positives + false_negatives
+        refresh_correctness = round(true_positives / max(1, total_eval), 4)
+
     # Scorer cliff: If wrong company published, score is ZERO
     if wrong_company_count > 0:
         overall_score = 0.0
     else:
-        # Balanced score: 40% precision + 30% evidence validity + 30% coverage
-        raw = (claim_precision * 0.40 + evidence_validity * 0.30 + min(1.0, coverage_recall) * 0.30) * 100.0
+        # Balanced score strictly adhering to organizer priority:
+        # 35% Precision + 25% Evidence Validity + 25% Coverage + 15% Refresh Correctness
+        raw = (
+            claim_precision * 0.35 +
+            evidence_validity * 0.25 +
+            min(1.0, coverage_recall) * 0.25 +
+            refresh_correctness * 0.15
+        ) * 100.0
         overall_score = round(raw, 2)
 
     return {
@@ -107,6 +138,7 @@ def score_strategy_attempts(
         "claim_precision": claim_precision,
         "evidence_validity": evidence_validity,
         "coverage_recall": coverage_recall,
+        "refresh_correctness": refresh_correctness,
         "mean_runtime_ms": mean_runtime,
         "mean_request_count": mean_requests,
         "total_cost_usd": total_cost,

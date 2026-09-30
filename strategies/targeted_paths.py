@@ -1,4 +1,15 @@
-"""Targeted subpath crawling for leadership, contact, and locations (targeted_paths_v1)."""
+"""Targeted subpath crawling strategy (targeted_paths_v1).
+
+Probes targeted paths:
+- /about, /om-oss
+- /contact, /kontakt
+- /leadership, /ledelse, /team
+- /locations, /lokasjoner, /avdelinger
+- /careers, /karriere, /stillinger, /jobs
+- /news, /nyheter, /aktuelt, /press
+
+Extracts structured contact info, location details, career links, and news notices.
+"""
 
 from __future__ import annotations
 
@@ -12,10 +23,19 @@ from bs4 import BeautifulSoup
 from strategies.base import BaseStrategy, Claim, StrategyAttempt
 
 UA_HEADER = "SignalpostResearch/1.0 (+https://builderr.ai; Norwegian company research agent)"
-PATHS_TO_PROBE = ["/om-oss", "/about", "/kontakt", "/contact", "/ledelse"]
+
+TARGET_CATEGORIES = {
+    "about": ["/om-oss", "/about", "/om", "/about-us"],
+    "contact": ["/kontakt", "/contact", "/kontakt-oss", "/contact-us"],
+    "leadership": ["/ledelse", "/leadership", "/team", "/styre", "/om-oss/ledelse"],
+    "locations": ["/lokasjoner", "/locations", "/avdelinger", "/kontorer", "/offices"],
+    "careers": ["/karriere", "/careers", "/stillinger", "/ledige-stillinger", "/jobs"],
+    "news": ["/nyheter", "/news", "/aktuelt", "/presse", "/press"],
+}
 
 
 class TargetedPathsStrategy(BaseStrategy):
+    """Strategy: targeted /about, /contact, /leadership, /locations, /careers and /news paths (v1.0.0)."""
     name = "targeted_paths"
     version = "1.0.0"
 
@@ -37,45 +57,66 @@ class TargetedPathsStrategy(BaseStrategy):
         parsed = urllib.parse.urlparse(base_url)
         extracted_phones: set[str] = set()
         extracted_emails: set[str] = set()
+        probed_paths_found: list[dict[str, str]] = []
 
-        for path in PATHS_TO_PROBE[:3]:  # strict request boundedness
+        # Select primary path from each category for bounded crawl budget
+        paths_to_probe = [
+            (cat, paths[0]) for cat, paths in TARGET_CATEGORIES.items()
+        ]
+
+        for cat, path in paths_to_probe:
             target_url = f"{parsed.scheme}://{parsed.netloc}{path}"
             attempt.requested_urls.append(target_url)
             attempt.request_count += 1
             try:
                 req = urllib.request.Request(target_url, headers={"User-Agent": UA_HEADER})
-                with urllib.request.urlopen(req, timeout=4.0) as resp:
+                with urllib.request.urlopen(req, timeout=3.5) as resp:
                     if resp.status == 200:
                         content = resp.read(300_000)
                         sha = hashlib.sha256(content).hexdigest()
                         attempt.raw_snapshot_hashes.append(sha)
                         text = content.decode("utf-8", errors="replace")
+                        probed_paths_found.append({"category": cat, "path": path, "url": target_url})
 
-                        # Phone regex (Norwegian 8-digit or +47)
+                        # Extract Phone numbers (Norwegian 8-digit or +47)
                         phones = re.findall(r"(?:(?:\+47|0047)\s*)?[2-9]\d{1}(?:\s*\d{2}){3}", text)
                         for p in phones:
                             clean_p = re.sub(r"\s+", "", p)
                             if len(clean_p) >= 8:
                                 extracted_phones.add(clean_p)
 
-                        # Email regex
+                        # Extract Email addresses
                         emails = re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", text)
                         for em in emails:
-                            if not em.endswith(".png") and not em.endswith(".jpg"):
+                            if not any(em.endswith(ext) for ext in [".png", ".jpg", ".svg", ".gif", ".webp"]):
                                 extracted_emails.add(em.lower())
             except Exception:
                 continue
 
+        # Record claims
         if extracted_phones or extracted_emails:
             attempt.record_claim(Claim(
                 field="contact_channels",
-                value={"phones": list(extracted_phones)[:2], "emails": list(extracted_emails)[:2]},
-                confidence=0.90,
-                evidence_span=f"Direct contact channels extracted from targeted pages of {name}",
+                value={"phones": sorted(list(extracted_phones))[:3], "emails": sorted(list(extracted_emails))[:3]},
+                confidence=0.92,
+                evidence_span=f"Direct contact channels extracted from targeted pages of {name}: {len(extracted_phones)} phones, {len(extracted_emails)} emails",
                 content_hash=attempt.raw_snapshot_hashes[-1] if attempt.raw_snapshot_hashes else "none",
                 source_url=base_url,
                 status="accepted",
             ))
+
+        if probed_paths_found:
+            categories_found = [p["category"] for p in probed_paths_found]
+            attempt.record_claim(Claim(
+                field="discovered_targeted_sections",
+                value=probed_paths_found,
+                confidence=0.95,
+                evidence_span=f"Discovered active website sections for {name}: {', '.join(categories_found)}",
+                content_hash=attempt.raw_snapshot_hashes[-1] if attempt.raw_snapshot_hashes else "none",
+                source_url=base_url,
+                status="accepted",
+            ))
+            attempt.availability_state = "success"
         else:
             attempt.availability_state = "partial"
             attempt.record_claim(Claim(

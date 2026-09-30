@@ -13,9 +13,15 @@ from dataclasses import dataclass
 from typing import Any
 
 from bs4 import BeautifulSoup
-import extruct
+try:
+    import extruct
+except ImportError:
+    extruct = None
 import tldextract
-import trafilatura
+try:
+    import trafilatura
+except ImportError:
+    trafilatura = None
 
 from .evidence import evidence
 
@@ -222,7 +228,11 @@ def _fetch_secondary_page(url: str, *, homepage_domain: str, timeout: float, max
                 return None, [], 2, len(raw), elapsed, "redirected outside registered domain"
         page_html = raw.decode("utf-8", errors="replace")
         page_soup = BeautifulSoup(page_html, "lxml")
-        page_text = trafilatura.extract(page_html, url=final_url, include_links=False, include_tables=False, favor_precision=True) or ""
+        page_text = (
+            trafilatura.extract(page_html, url=final_url, include_links=False, include_tables=False, favor_precision=True)
+            if trafilatura is not None
+            else page_soup.get_text(" ", strip=True)
+        ) or ""
         page = {
             "url": final_url,
             "title": page_soup.title.get_text(" ", strip=True)[:500] if page_soup.title else "",
@@ -284,8 +294,15 @@ def fetch_website(url: str | None, *, timeout: float = 15.0, max_bytes: int = 2_
             assert_public_url(final_url)
         html = raw.decode("utf-8", errors="replace")
         soup = BeautifulSoup(html, "lxml")
-        structured = extruct.extract(html, base_url=final_url, syntaxes=["json-ld", "microdata", "opengraph"])
-        text = trafilatura.extract(html, url=final_url, include_links=False, include_tables=False, favor_precision=True) or ""
+        if extruct is not None:
+            structured = extruct.extract(html, base_url=final_url, syntaxes=["json-ld", "microdata", "opengraph"])
+        else:
+            structured = {"json-ld": [], "microdata": [], "opengraph": []}
+        text = (
+            trafilatura.extract(html, url=final_url, include_links=False, include_tables=False, favor_precision=True)
+            if trafilatura is not None
+            else soup.get_text(" ", strip=True)
+        ) or ""
         title = soup.title.get_text(" ", strip=True) if soup.title else ""
         description_tag = soup.select_one('meta[name="description"], meta[property="og:description"]')
         description = str(description_tag.get("content") or "").strip() if description_tag else ""
