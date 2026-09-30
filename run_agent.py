@@ -142,9 +142,11 @@ def main() -> None:
             cnt = count_organisations(org_file)
             args.extend(["--expected-count", str(cnt)])
 
-    # 6. Check if full agent mode or standard competition batch
-    if "--full-agent" in args or "--enrich-external" in args:
-        clean_args = [a for a in args if a != "--full-agent"]
+    # 6. Check if full agent mode (all APIs: paid + free) or minimal official batch
+    if any(a in args for a in ("--all-apis", "--full-agent", "--enrich-external", "--with-apis")):
+        clean_args = [a for a in args if a not in ("--all-apis", "--full-agent", "--with-apis")]
+        if "--enrich-external" not in clean_args:
+            clean_args.append("--enrich-external")
         sys.argv = [sys.argv[0]] + clean_args
         from scripts.run_agent import main as full_agent_main
         full_agent_main()
