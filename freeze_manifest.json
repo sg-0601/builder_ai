@@ -1,9 +1,9 @@
 {
   "freeze_version": "1.0.0",
   "code_state": {
-    "git_commit": "3031ee4897fae2c8b9d1acc7057cbd1f12f5914e",
+    "git_commit": "fbf72477b795c92e476e6d6d7ee7c7c3b8030b4f",
     "pyproject_sha256": "f6fbc564c40ecbd88f066a8222a9dc1468312a48759fd49c6cdd30a414407c70",
-    "frozen_at": "2026-09-30T11:58:55.165169+00:00"
+    "frozen_at": "2026-09-30T12:10:21.211770+00:00"
   },
   "routing_table": {
     "default_baseline": "registry_site_v1",
@@ -250,5 +250,5 @@
       "robots_txt_obeyed": true
     }
   },
-  "integrity_seal_sha256": "3e5964e80ddeb236dcb1c14025ba5758678eb80a487261be5528f979716cf0a8"
+  "integrity_seal_sha256": "a04196166c857e858b8a7da7113f526ab13e78aa98b39d6d9bc2ef91d1b124bb"
 }

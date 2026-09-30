@@ -64,18 +64,14 @@ def main() -> None:
             args.extend(["--organisations", target_org])
             org_flag_present = True
 
-    # 3. Smart candidate defaults for missing arguments
-    bulk_candidates = [
-        ROOT / "signalpost-company-universe-2025.jsonl.gz",
-        ROOT / "brreg-enheter.csv",
-        ROOT / "signalpost-universe.jsonl.gz",
-        ROOT.parent / "signalpost-company-universe-2025.jsonl.gz",
-        Path.cwd() / "signalpost-company-universe-2025.jsonl.gz",
-        Path.cwd() / "brreg-enheter.csv",
-    ]
-    chosen_bulk = next((str(p) for p in bulk_candidates if p.exists()), str(ROOT / "signalpost-company-universe-2025.jsonl.gz"))
+    # 3. Resolve target organisations file
+    chosen_orgs = None
+    for i, a in enumerate(args):
+        if a in ("--organisations", "--orgs", "-i") and i + 1 < len(args):
+            chosen_orgs = args[i + 1]
+            break
 
-    if not org_flag_present:
+    if not chosen_orgs:
         org_candidates = [
             ROOT / "entry-companies-100.jsonl",
             ROOT / "batch-100.jsonl",
@@ -87,9 +83,28 @@ def main() -> None:
         chosen_orgs = next((str(p) for p in org_candidates if p.exists()), str(ROOT / "entry-companies-100.jsonl"))
         args.extend(["--organisations", chosen_orgs])
 
+    # 4. Resolve bulk candidates (large universe or self-contained profile jsonl)
+    bulk_candidates = [
+        ROOT / "signalpost-company-universe-2025.jsonl.gz",
+        ROOT / "brreg-enheter.csv",
+        ROOT / "signalpost-universe.jsonl.gz",
+        ROOT.parent / "signalpost-company-universe-2025.jsonl.gz",
+        Path.cwd() / "signalpost-company-universe-2025.jsonl.gz",
+        Path.cwd() / "brreg-enheter.csv",
+    ]
+    if chosen_orgs and Path(chosen_orgs).exists() and Path(chosen_orgs).suffix == ".jsonl":
+        bulk_candidates.append(Path(chosen_orgs))
+
+    chosen_bulk = next((str(p) for p in bulk_candidates if p.exists()), chosen_orgs)
+
     bulk_flag_present = any(arg in args for arg in ("--bulk", "-b"))
     if not bulk_flag_present:
         args.extend(["--bulk", chosen_bulk])
+    elif "--bulk" in args:
+        b_idx = args.index("--bulk")
+        if b_idx + 1 < len(args) and not Path(args[b_idx + 1]).exists() and chosen_bulk and Path(chosen_bulk).exists():
+            print(f"Notice: Bulk snapshot {args[b_idx + 1]} not found; using baseline {chosen_bulk}")
+            args[b_idx + 1] = chosen_bulk
 
     # 4. Handle output directory and required batch arguments
     output_dir = "out"
