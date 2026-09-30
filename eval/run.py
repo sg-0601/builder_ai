@@ -62,6 +62,21 @@ def save_claims(attempts: list, storage_dir: Path, tag: str) -> None:
                 f.write(json.dumps(claim_data, default=str) + "\n")
 
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+
+def run_strategy_concurrent(strategy, company_list: list[dict], max_workers: int = 8) -> list:
+    if max_workers <= 1 or len(company_list) <= 1:
+        return [strategy.execute(c) for c in company_list]
+    with ThreadPoolExecutor(max_workers=min(max_workers, len(company_list))) as pool:
+        future_to_idx = {pool.submit(strategy.execute, c): i for i, c in enumerate(company_list)}
+        results = [None] * len(company_list)
+        for future in as_completed(future_to_idx):
+            idx = future_to_idx[future]
+            results[idx] = future.result()
+        return results
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Signalpost Learning Harness - Strategy Evaluation & Accuracy Runner")
     parser.add_argument("--corpus", default="eval/gold_companies.jsonl", help="Path to evaluation corpus JSONL")
@@ -69,6 +84,7 @@ def main() -> None:
     parser.add_argument("--challenger", default=None, help="Name of challenger strategy to compare against baseline")
     parser.add_argument("--baseline", default="registry_site", help="Name of baseline strategy (default: registry_site)")
     parser.add_argument("--min-gain", type=float, default=0.0, help="Minimum coverage gain required to promote")
+    parser.add_argument("--workers", type=int, default=8, help="Number of concurrent workers (default: 8)")
     parser.add_argument("--dry-run", "--no-save", dest="dry_run", action="store_true", help="Run in memory without saving any files or snapshots to folder")
     args = parser.parse_args()
 
@@ -111,17 +127,18 @@ def main() -> None:
     else:
         print(f"Strategy:   {strat.name} (v{strat.version})")
     print(f"Mode:       {'DRY-RUN (Read-Only / No Folder Changes)' if args.dry_run else 'PERSISTENT (Snapshots & Claims Saved)'}")
+    print(f"Workers:    {args.workers} concurrent threads")
     print("-" * 70)
 
     # 1. Execute Target Strategy
-    print(f"[*] Running strategy: {strat.name}...")
-    attempts = [strat.execute(c) for c in companies]
+    print(f"[*] Running strategy: {strat.name} ({args.workers} workers)...")
+    attempts = run_strategy_concurrent(strat, companies, max_workers=args.workers)
 
     # 2. Execute Baseline if comparison requested
     baseline_attempts = None
     if is_comparison and baseline_strat:
-        print(f"[*] Running baseline strategy: {baseline_strat.name}...")
-        baseline_attempts = [baseline_strat.execute(c) for c in companies]
+        print(f"[*] Running baseline strategy: {baseline_strat.name} ({args.workers} workers)...")
+        baseline_attempts = run_strategy_concurrent(baseline_strat, companies, max_workers=args.workers)
 
     # 3. Preserve Every Attempt & Claim ONLY if not dry-run
     if not args.dry_run:

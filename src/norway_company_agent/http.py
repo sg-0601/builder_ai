@@ -45,9 +45,12 @@ def fetch_json(url: str, *, timeout: float = 20.0, attempts: int = 3) -> FetchRe
             raw = exc.read()
             if exc.code in {404, 410}:
                 return FetchResult(url, exc.code, elapsed, len(raw), error=f"HTTP {exc.code}", content_sha256=hashlib.sha256(raw).hexdigest(), retrieved_at=_utc_now())
+            if exc.code in {429, 503}:
+                # Adaptive backoff on server rate-limiting
+                time.sleep(min(1.5 * (2**attempt), 6.0))
             last_error = f"HTTP {exc.code}"
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
             last_error = type(exc).__name__
         if attempt + 1 < attempts:
-            time.sleep(0.4 * (2**attempt))
+            time.sleep(0.5 * (2**attempt))
     return FetchResult(url, 0, 0, 0, error=last_error, retrieved_at=_utc_now())

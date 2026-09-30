@@ -34,18 +34,19 @@ class SearchCandidatesStrategy(BaseStrategy):
         # Option A: Try Tavily AI Search if key is available
         if tavily_key:
             attempt.request_count += 1
-            attempt.cost_usd += 0.001
             try:
+                location_str = f" {muni}" if muni else ""
                 url = "https://api.tavily.com/search"
                 payload = json.dumps({
                     "api_key": tavily_key,
-                    "query": f'"{name}" norge orgnr {org}',
+                    "query": f'"{name}"{location_str} norge {org}',
                     "search_depth": "basic",
                     "max_results": 2,
                 }).encode("utf-8")
                 req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json", "User-Agent": UA_HEADER})
                 with urllib.request.urlopen(req, timeout=5.0) as resp:
                     data = json.loads(resp.read().decode())
+                attempt.cost_usd += 0.001
                 results = data.get("results", [])
                 if results:
                     top = results[0]
