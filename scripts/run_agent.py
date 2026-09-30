@@ -57,6 +57,7 @@ from norway_company_agent.live_connectors import (
     extract_website_signals,
     fetch_brave_search,
     fetch_brreg_kunngjoringer,
+    fetch_fagfolkguiden_reviews,
     fetch_google_news_rss,
     fetch_google_places,
     fetch_gulesider_directory,
@@ -327,6 +328,13 @@ def main() -> None:
             observations.extend(gule_obs)
             p_cost += gule_cost
             ext_requests += 1
+
+            # 8b. Fagfolkguiden Free Local Directory & Embedded Reviews (100% Free)
+            fag_obs, fag_cost = fetch_fagfolkguiden_reviews(profile)
+            observations.extend(fag_obs)
+            p_cost += fag_cost
+            if fag_obs:
+                ext_requests += 1
 
             # 9. Tavily AI Search API (Paid via TAVILY_API_KEY)
             tavily_res = None

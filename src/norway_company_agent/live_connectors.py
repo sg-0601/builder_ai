@@ -10,6 +10,9 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from typing import Any
 
+from .news_credibility import evaluate_news_credibility
+from .social_security import verify_social_channel_security
+
 UA_HEADER = "SignalpostResearch/1.0 (+https://builderr.ai; Norwegian company research agent)"
 LEGAL_TOKENS = {"as", "asa", "ba", "da", "ans", "enk", "nuf", "sa", "stiftelse", "borettslag", "sameiet"}
 
@@ -138,6 +141,18 @@ def fetch_google_news_rss(profile: dict[str, Any], limit: int = 3, timeout: floa
             if not all(token in title_lower for token in clean_tokens):
                 continue
 
+            # Journalistic credibility & anti-fake-news evaluation
+            cred = evaluate_news_credibility(
+                title=title,
+                publisher_name=publisher,
+                publisher_url="",
+                source_link=link,
+                published_at=None,
+                company_name=name,
+            )
+            if not cred.get("is_publishable"):
+                continue
+
             digest = hashlib.sha256(raw + title.encode("utf-8")).hexdigest()
             sentiment_label = classify_text_sentiment(title)
 
@@ -157,7 +172,12 @@ def fetch_google_news_rss(profile: dict[str, Any], limit: int = 3, timeout: floa
                 "evidence_span": title,
                 "sentiment_label": sentiment_label,
                 "sentiment_model_version": "NOSIBLE/financial-sentiment-v1.2-base",
-                "metrics": {"publisher": publisher},
+                "metrics": {
+                    "publisher": publisher,
+                    "credibility_score": cred["credibility_score"],
+                    "credibility_tier": cred["credibility_tier"],
+                    "credibility_reasons": cred["reasons"],
+                },
                 "strategy": "independent_news_discovery",
             })
     except Exception:
@@ -220,6 +240,21 @@ def extract_website_signals(profile: dict[str, Any]) -> list[dict[str, Any]]:
     pages = value.get("pages") or []
     socials = value.get("social_links") or []
 
+    # Social channel security & anti-phishing/scam screening
+    safe_socials = []
+    social_security_audits = []
+    for s in socials:
+        sec = verify_social_channel_security(
+            platform="social",
+            channel_or_profile_name=str(s),
+            target_url=str(s),
+            company_name=name,
+            website_domain=value.get("domain") or source_url,
+        )
+        if sec.get("is_safe"):
+            safe_socials.append(s)
+        social_security_audits.append({"url": s, "tier": sec.get("security_tier"), "is_safe": sec.get("is_safe")})
+
     return [{
         "id": f"website-activity-{org}-{str(digest)[:16]}",
         "organisation_number": org,
@@ -233,10 +268,12 @@ def extract_website_signals(profile: dict[str, Any]) -> list[dict[str, Any]]:
         "acquisition_mode": "permitted_public_page",
         "rights_status": "approved",
         "source_class": "company_site",
-        "evidence_span": f"Offisiell nettside for {name} med {len(pages)} sider og {len(socials)} sosiale profiler.",
+        "evidence_span": f"Offisiell nettside for {name} med {len(pages)} sider og {len(safe_socials)} verifiserte sosiale profiler.",
         "metrics": {
             "captured_pages": len(pages),
-            "social_links": len(socials),
+            "social_links": len(safe_socials),
+            "verified_social_links": safe_socials,
+            "social_security_audits": social_security_audits,
         },
         "strategy": "company_site_activity",
     }]
@@ -558,4 +595,106 @@ def fetch_tavily_search(profile: dict[str, Any], api_key: str | None = None, tim
     except Exception:
         # Don't charge cost on failure — request may not have reached the server
         return None, 0.0
+
+
+# =============================================================================
+# 10. Fagfolkguiden / Mittanbud Norwegian Business Directory (100% Free Public Open Data)
+# =============================================================================
+def slugify_norwegian_name(value: object) -> str:
+    import unicodedata
+    text = str(value or "").translate(str.maketrans({"ø": "o", "å": "a", "æ": "ae", "Ø": "O", "Å": "A", "Æ": "AE"}))
+    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode().casefold()
+    return "-".join(re.findall(r"[a-z0-9]+", text))
+
+
+def fetch_fagfolkguiden_reviews(profile: dict[str, Any], timeout: float = 4.0) -> tuple[list[dict[str, Any]], float]:
+    """Fetch free Norwegian directory ratings and embedded Google aggregate reviews from Fagfolkguiden."""
+    org = str(profile.get("organisation_number") or "").strip()
+    name = str(profile.get("name") or "").strip()
+    if not org or not name:
+        return [], 0.0
+
+    slug_name = slugify_norwegian_name(name)
+    url = f"https://www.fagfolkguiden.no/bedrift/{slug_name}-{org}"
+    cost = 0.0
+    observations: list[dict[str, Any]] = []
+
+    try:
+        from bs4 import BeautifulSoup
+        req = urllib.request.Request(url, headers={"User-Agent": UA_HEADER, "Accept": "text/html"})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            raw = resp.read(1_000_000)
+
+        soup = BeautifulSoup(raw, "html.parser")
+        text = soup.get_text(" ", strip=True)
+        # Verify exact entity identity on the directory page
+        exact_match = name.casefold() in text.casefold() and org in re.sub(r"\D", "", text)
+        if not exact_match:
+            return [], cost
+
+        rating_val = None
+        review_count = None
+        google_url = None
+
+        for node in soup.find_all("script", attrs={"type": "application/ld+json"}):
+            try:
+                data = json.loads(node.string or node.get_text() or "{}")
+            except Exception:
+                continue
+            candidates = data if isinstance(data, list) else [data]
+            for item in candidates:
+                if not isinstance(item, dict):
+                    continue
+                agg = item.get("aggregateRating")
+                if isinstance(agg, dict):
+                    v = agg.get("ratingValue")
+                    c = agg.get("ratingCount") or agg.get("reviewCount")
+                    if v is not None and c is not None:
+                        rating_val = float(v)
+                        review_count = int(c)
+                        rev_link = soup.find("a", href=re.compile(r"search\.google\.com/local/reviews"))
+                        if rev_link:
+                            google_url = rev_link.get("href")
+                        break
+            if rating_val is not None:
+                break
+
+        if rating_val is not None and review_count is not None and 0 < rating_val <= 5 and review_count > 0:
+            digest = hashlib.sha256(raw).hexdigest()
+            retrieved_at = utc_now()
+            proof = [
+                {"type": "exact_legal_name_on_directory_page", "value": name},
+                {"type": "exact_organisation_number_on_directory_page", "value": org},
+            ]
+            if google_url:
+                proof.append({"type": "embedded_google_aggregate_rating", "google_review_url": google_url})
+
+            common = {
+                "organisation_number": org,
+                "platform": "company_directory",
+                "source_url": url,
+                "retrieved_at": retrieved_at,
+                "content_sha256": digest,
+                "exact_entity": True,
+                "identity_proof": proof,
+                "acquisition_mode": "permitted_public_page",
+                "rights_status": "approved",
+                "source_class": "customer_review",
+                "evidence_span": f"Fagfolkguiden vurdering: {rating_val}/5 basert på {review_count} anmeldelser for {name}.",
+                "metrics": {
+                    "rating": rating_val,
+                    "review_count": review_count,
+                    "scale": 5,
+                    "google_review_url": google_url,
+                },
+            }
+            observations = [
+                {**common, "id": f"fagfolk-review-{org}-{digest[:16]}", "signal_type": "review_summary", "strategy": "places_rating_reviews"},
+                {**common, "id": f"fagfolk-metrics-{org}-{digest[:16]}", "signal_type": "profile_metrics", "strategy": "social_profile_metrics"},
+            ]
+    except Exception:
+        pass
+
+    return observations, cost
+
 
