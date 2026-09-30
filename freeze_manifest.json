@@ -1,9 +1,9 @@
 {
   "freeze_version": "1.0.0",
   "code_state": {
-    "git_commit": "3d960af517210717837ef8645385fff4ca76b702",
+    "git_commit": "88253f942ad5bc5f8416e7a84feb5203eecfaf85",
     "pyproject_sha256": "f6fbc564c40ecbd88f066a8222a9dc1468312a48759fd49c6cdd30a414407c70",
-    "frozen_at": "2026-09-30T12:22:09.961843+00:00"
+    "frozen_at": "2026-09-30T14:53:26.225471+00:00"
   },
   "routing_table": {
     "default_baseline": "registry_site_v1",
@@ -45,6 +45,16 @@
         "name": "decision_table_router",
         "version": "1.0.0",
         "class": "DecisionTableRouterStrategy"
+      },
+      "decision_table_router_v2": {
+        "name": "decision_table_router_v2",
+        "version": "2.0.0",
+        "class": "DecisionTableRouterV2Strategy"
+      },
+      "decision_table_router_v2_v2": {
+        "name": "decision_table_router_v2",
+        "version": "2.0.0",
+        "class": "DecisionTableRouterV2Strategy"
       },
       "jsonld_opengraph": {
         "name": "jsonld_opengraph",
@@ -250,5 +260,5 @@
       "robots_txt_obeyed": true
     }
   },
-  "integrity_seal_sha256": "ceb7f96298679a3a405d11f2d5ffa6cb37d2f249766a10c8bb23a3ac5568617f"
+  "integrity_seal_sha256": "73e4646af21356fa625894268e75a2fbef5746b005f6cf41f92a72408c404e2f"
 }

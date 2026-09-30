@@ -50,20 +50,26 @@ class JsonLdOpenGraphStrategy(BaseStrategy):
 
         attempt.requested_urls.append(target_url)
         attempt.candidate_domains.append(parsed.hostname.lower())
-        attempt.request_count += 1
+        prefetched_bytes = kwargs.get("prefetched_bytes")
+        prefetched_url = kwargs.get("final_url")
 
-        try:
-            req = urllib.request.Request(
-                target_url,
-                headers={"User-Agent": UA_HEADER, "Accept": "text/html,application/xhtml+xml"},
-            )
-            with urllib.request.urlopen(req, timeout=5.0) as resp:
-                final_url = resp.geturl()
-                raw_bytes = resp.read(2_000_000)
-        except Exception as exc:
-            attempt.availability_state = "failed"
-            attempt.errors.append(f"HTTP fetch failed for structured data: {str(exc)[:150]}")
-            return
+        if prefetched_bytes:
+            final_url = prefetched_url or target_url
+            raw_bytes = prefetched_bytes
+        else:
+            attempt.request_count += 1
+            try:
+                req = urllib.request.Request(
+                    target_url,
+                    headers={"User-Agent": UA_HEADER, "Accept": "text/html,application/xhtml+xml"},
+                )
+                with urllib.request.urlopen(req, timeout=5.0) as resp:
+                    final_url = resp.geturl()
+                    raw_bytes = resp.read(2_000_000)
+            except Exception as exc:
+                attempt.availability_state = "failed"
+                attempt.errors.append(f"HTTP fetch failed for structured data: {str(exc)[:150]}")
+                return
 
         sha256_hash = hashlib.sha256(raw_bytes).hexdigest()
         attempt.raw_snapshot_hashes.append(sha256_hash)

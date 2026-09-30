@@ -6,7 +6,7 @@ from typing import Any
 
 from strategies.base import BaseStrategy
 from strategies.browser_fallback import BrowserFallbackV1Strategy, BrowserFallbackV2Strategy
-from strategies.decision_table_router import DecisionTableRouterStrategy
+from strategies.decision_table_router import DecisionTableRouterStrategy, DecisionTableRouterV2Strategy
 from strategies.jsonld_opengraph import JsonLdOpenGraphStrategy
 from strategies.leader_founder_bridge import LeaderFounderBridgeStrategy
 from strategies.pdf_fallback import PdfFallbackStrategy
@@ -50,6 +50,7 @@ class StrategyRegistry:
             BrowserFallbackV2Strategy(),
             PdfFallbackStrategy(),
             DecisionTableRouterStrategy(),
+            DecisionTableRouterV2Strategy(),
         ]
         for strat in defaults:
             self.register(strat)

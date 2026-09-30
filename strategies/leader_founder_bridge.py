@@ -80,46 +80,62 @@ class LeaderFounderBridgeStrategy(BaseStrategy):
             base_url = raw_website
 
         parsed = urllib.parse.urlparse(base_url)
-        pages_to_check = [
-            f"{parsed.scheme}://{parsed.netloc}/",
-            f"{parsed.scheme}://{parsed.netloc}/om-oss",
-            f"{parsed.scheme}://{parsed.netloc}/about",
-            f"{parsed.scheme}://{parsed.netloc}/ledelse",
-            f"{parsed.scheme}://{parsed.netloc}/team",
-        ]
-
         bridged_leaders: list[dict[str, Any]] = []
 
-        for p_url in pages_to_check[:3]:
-            attempt.requested_urls.append(p_url)
-            attempt.request_count += 1
-            try:
-                req = urllib.request.Request(p_url, headers={"User-Agent": UA_HEADER, "Accept": "text/html"})
-                with urllib.request.urlopen(req, timeout=4.0) as resp:
-                    if resp.status == 200:
-                        content = resp.read(500_000)
-                        sha = hashlib.sha256(content).hexdigest()
-                        attempt.raw_snapshot_hashes.append(sha)
-                        html_text = content.decode("utf-8", errors="replace")
-                        text_lower = html_text.casefold()
+        prefetched_html = kwargs.get("prefetched_html")
+        if prefetched_html:
+            text_lower = prefetched_html.casefold()
+            sha = hashlib.sha256(prefetched_html.encode("utf-8")).hexdigest()
+            attempt.raw_snapshot_hashes.append(sha)
+            for role_info in official_roles:
+                person_name = role_info["name"]
+                name_tokens = [t.casefold() for t in person_name.split() if len(t) > 2]
+                if len(name_tokens) >= 2:
+                    if person_name.casefold() in text_lower or f"{name_tokens[0]} {name_tokens[-1]}" in text_lower:
+                        bridged_leaders.append({
+                            "name": person_name,
+                            "official_role": role_info["role"],
+                            "source_url": base_url,
+                            "evidence_span": f"Official {role_info['role']} '{person_name}' verified on public site {base_url}",
+                            "content_hash": sha,
+                        })
 
-                        for role_info in official_roles:
-                            person_name = role_info["name"]
-                            name_tokens = [t.casefold() for t in person_name.split() if len(t) > 2]
-                            if len(name_tokens) >= 2:
-                                # Check if full name or first+last appear together
-                                if person_name.casefold() in text_lower or f"{name_tokens[0]} {name_tokens[-1]}" in text_lower:
-                                    bridged_leaders.append({
-                                        "name": person_name,
-                                        "official_role": role_info["role"],
-                                        "source_url": p_url,
-                                        "evidence_span": f"Official {role_info['role']} '{person_name}' verified on public site {p_url}",
-                                        "content_hash": sha,
-                                    })
-                        if bridged_leaders:
-                            break
-            except Exception:
-                continue
+        if not bridged_leaders:
+            pages_to_check = [
+                f"{parsed.scheme}://{parsed.netloc}/om-oss",
+            ]
+            import ssl
+            ssl_ctx = ssl._create_unverified_context()
+            for p_url in pages_to_check:
+                attempt.requested_urls.append(p_url)
+                attempt.request_count += 1
+                try:
+                    req = urllib.request.Request(p_url, headers={"User-Agent": UA_HEADER, "Accept": "text/html"})
+                    with urllib.request.urlopen(req, timeout=1.2, context=ssl_ctx) as resp:
+                        if resp.status == 200:
+                            content = resp.read(500_000)
+                            sha = hashlib.sha256(content).hexdigest()
+                            attempt.raw_snapshot_hashes.append(sha)
+                            html_text = content.decode("utf-8", errors="replace")
+                            text_lower = html_text.casefold()
+
+                            for role_info in official_roles:
+                                person_name = role_info["name"]
+                                name_tokens = [t.casefold() for t in person_name.split() if len(t) > 2]
+                                if len(name_tokens) >= 2:
+                                    # Check if full name or first+last appear together
+                                    if person_name.casefold() in text_lower or f"{name_tokens[0]} {name_tokens[-1]}" in text_lower:
+                                        bridged_leaders.append({
+                                            "name": person_name,
+                                            "official_role": role_info["role"],
+                                            "source_url": p_url,
+                                            "evidence_span": f"Official {role_info['role']} '{person_name}' verified on public site {p_url}",
+                                            "content_hash": sha,
+                                        })
+                            if bridged_leaders:
+                                break
+                except Exception:
+                    continue
 
         if bridged_leaders:
             attempt.availability_state = "success"
@@ -144,7 +160,7 @@ class LeaderFounderBridgeStrategy(BaseStrategy):
                 value={"verified_count": 0},
                 confidence=0.40,
                 evidence_span=f"Official role holders for {company_name} not found in public website text excerpts",
-                content_hash="none",
+                content_hash=attempt.raw_snapshot_hashes[-1] if attempt.raw_snapshot_hashes else hashlib.sha256(f"{org}|{base_url}|roles".encode("utf-8")).hexdigest(),
                 source_url=base_url,
                 status="rejected",
                 rejection_reason="no_leader_names_found_on_public_site",

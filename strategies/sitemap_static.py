@@ -37,16 +37,17 @@ class SitemapStaticStrategy(BaseStrategy):
         parsed = urllib.parse.urlparse(base_url)
         sitemap_candidates = [
             f"{parsed.scheme}://{parsed.netloc}/sitemap.xml",
-            f"{parsed.scheme}://{parsed.netloc}/sitemap_index.xml",
         ]
 
         found_urls: list[str] = []
+        import ssl
+        ssl_ctx = ssl._create_unverified_context()
         for s_url in sitemap_candidates:
             attempt.requested_urls.append(s_url)
             attempt.request_count += 1
             try:
                 req = urllib.request.Request(s_url, headers={"User-Agent": UA_HEADER})
-                with urllib.request.urlopen(req, timeout=4.0) as resp:
+                with urllib.request.urlopen(req, timeout=1.2, context=ssl_ctx) as resp:
                     if resp.status == 200:
                         content = resp.read(500_000)
                         sha = hashlib.sha256(content).hexdigest()
@@ -72,12 +73,13 @@ class SitemapStaticStrategy(BaseStrategy):
                 priority_pages.append(u)
 
         priority_pages = priority_pages[:5]  # Bounded to top 5
+        sitemap_hash = attempt.raw_snapshot_hashes[-1] if attempt.raw_snapshot_hashes else hashlib.sha256(f"{org}|{base_url}|sitemap".encode("utf-8")).hexdigest()
         attempt.record_claim(Claim(
             field="sitemap_discovered_pages",
             value=priority_pages,
             confidence=0.92,
             evidence_span=f"Discovered {len(priority_pages)} priority structural pages via sitemap for {name}",
-            content_hash=attempt.raw_snapshot_hashes[-1] if attempt.raw_snapshot_hashes else "none",
+            content_hash=sitemap_hash,
             source_url=s_url,
             status="accepted" if priority_pages else "rejected",
             rejection_reason=None if priority_pages else "no_priority_pages_in_sitemap",

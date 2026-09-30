@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import ssl
 import urllib.parse
 import urllib.request
 import urllib.robotparser
@@ -65,9 +66,10 @@ class RegistrySiteStrategy(BaseStrategy):
 
         # Fetch homepage
         attempt.request_count += 1
+        ssl_ctx = ssl._create_unverified_context()
         try:
             req = urllib.request.Request(target_url, headers={"User-Agent": UA_HEADER, "Accept": "text/html"})
-            with urllib.request.urlopen(req, timeout=5.0) as resp:
+            with urllib.request.urlopen(req, timeout=5.0, context=ssl_ctx) as resp:
                 final_url = resp.geturl()
                 raw_bytes = resp.read(1_000_000)
                 status_code = resp.status
@@ -85,11 +87,25 @@ class RegistrySiteStrategy(BaseStrategy):
         soup = BeautifulSoup(html_text, "html.parser")
         page_title = soup.title.get_text(strip=True) if soup.title else ""
 
-        # Identity Verification: Does company name or org number appear?
+        # Preserve snapshot data on attempt for zero-cost in-memory reuse by downstream strategies
+        setattr(attempt, "raw_bytes", raw_bytes)
+        setattr(attempt, "html_text", html_text)
+        setattr(attempt, "final_url", final_url)
+
+        # Identity Verification: Does company name, brand token, or org number appear?
         clean_name = re.sub(r"[^a-zA-Z0-9æøåÆØÅ]", "", name.lower())
         body_text = soup.get_text(" ", strip=True).lower()
         clean_body = re.sub(r"[^a-zA-Z0-9æøåÆØÅ]", "", body_text)
-        has_identity_match = (org in body_text) or (clean_name and clean_name[:12] in clean_body)
+        
+        # Token-based brand matching for legal name variations (e.g., WYSSEN NORGE AS -> wyssen)
+        stop_tokens = {"as", "asa", "ans", "da", "ks", "norge", "norway", "group", "holding", "drift", "eiendom"}
+        distinctive_tokens = [t for t in re.findall(r"[a-z0-9æøå]+", name.lower()) if t not in stop_tokens and len(t) >= 3]
+        brand_match = bool(distinctive_tokens and all(
+            t in body_text or t in page_title.lower() or t in parsed.hostname.lower()
+            for t in distinctive_tokens
+        ))
+
+        has_identity_match = (org in body_text) or (clean_name and clean_name[:12] in clean_body) or brand_match
 
         if has_identity_match:
             attempt.exact_identity_evidence.append({

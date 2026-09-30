@@ -108,18 +108,26 @@ class BrowserFallbackV2Strategy(BaseStrategy):
             target_url = raw_website
 
         attempt.requested_urls.append(target_url)
-        attempt.request_count += 1
-        try:
-            req = urllib.request.Request(target_url, headers={"User-Agent": UA_HEADER})
-            with urllib.request.urlopen(req, timeout=5.0) as resp:
-                content = resp.read(1_000_000)
-                final_url = resp.geturl()
-        except Exception as e:
-            attempt.availability_state = "failed"
-            attempt.errors.append(f"HTTP fetch failed: {str(e)[:100]}")
-            return
+        prefetched_bytes = kwargs.get("prefetched_bytes")
+        prefetched_html = kwargs.get("prefetched_html")
+        prefetched_url = kwargs.get("final_url")
 
-        html = content.decode("utf-8", errors="replace")
+        if prefetched_bytes is not None or prefetched_html is not None:
+            final_url = prefetched_url or target_url
+            content = prefetched_bytes if prefetched_bytes is not None else prefetched_html.encode("utf-8")
+        else:
+            attempt.request_count += 1
+            try:
+                req = urllib.request.Request(target_url, headers={"User-Agent": UA_HEADER})
+                with urllib.request.urlopen(req, timeout=5.0) as resp:
+                    content = resp.read(1_000_000)
+                    final_url = resp.geturl()
+            except Exception as e:
+                attempt.availability_state = "failed"
+                attempt.errors.append(f"HTTP fetch failed: {str(e)[:100]}")
+                return
+
+        html = prefetched_html if prefetched_html is not None else content.decode("utf-8", errors="replace")
         sha = hashlib.sha256(content).hexdigest()
         attempt.raw_snapshot_hashes.append(sha)
 

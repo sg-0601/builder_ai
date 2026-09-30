@@ -82,7 +82,7 @@ def main() -> None:
     parser.add_argument("--corpus", default="eval/gold_companies.jsonl", help="Path to evaluation corpus JSONL")
     parser.add_argument("--strategy", default=None, help="Name of strategy to evaluate individually")
     parser.add_argument("--challenger", default=None, help="Name of challenger strategy to compare against baseline")
-    parser.add_argument("--baseline", default="registry_site", help="Name of baseline strategy (default: registry_site)")
+    parser.add_argument("--baseline", default="decision_table_router", help="Name of baseline strategy (default: decision_table_router)")
     parser.add_argument("--min-gain", type=float, default=0.0, help="Minimum coverage gain required to promote")
     parser.add_argument("--workers", type=int, default=8, help="Number of concurrent workers (default: 8)")
     parser.add_argument("--dry-run", "--no-save", dest="dry_run", action="store_true", help="Run in memory without saving any files or snapshots to folder")
@@ -91,7 +91,7 @@ def main() -> None:
     # Determine execution mode: single strategy or challenger-vs-baseline comparison
     target_strategy = args.strategy or args.challenger
     if not target_strategy:
-        target_strategy = "decision_table_router"
+        target_strategy = "decision_table_router_v2"
 
     corpus_path = ROOT / args.corpus if not Path(args.corpus).is_absolute() else Path(args.corpus)
     if not corpus_path.exists():

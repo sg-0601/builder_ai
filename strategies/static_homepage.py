@@ -54,21 +54,28 @@ class StaticHomepageStrategy(BaseStrategy):
 
         attempt.requested_urls.append(target_url)
         attempt.candidate_domains.append(parsed.hostname.lower())
-        attempt.request_count += 1
+        prefetched_bytes = kwargs.get("prefetched_bytes")
+        prefetched_url = kwargs.get("final_url")
 
-        try:
-            req = urllib.request.Request(
-                target_url,
-                headers={"User-Agent": UA_HEADER, "Accept": "text/html,application/xhtml+xml"},
-            )
-            with urllib.request.urlopen(req, timeout=5.0) as resp:
-                final_url = resp.geturl()
-                content = resp.read(2_000_000)
-                status_code = resp.status
-        except Exception as exc:
-            attempt.availability_state = "failed"
-            attempt.errors.append(f"Static homepage fetch failed: {str(exc)[:150]}")
-            return
+        if prefetched_bytes:
+            final_url = prefetched_url or target_url
+            content = prefetched_bytes
+            status_code = 200
+        else:
+            attempt.request_count += 1
+            try:
+                req = urllib.request.Request(
+                    target_url,
+                    headers={"User-Agent": UA_HEADER, "Accept": "text/html,application/xhtml+xml"},
+                )
+                with urllib.request.urlopen(req, timeout=5.0) as resp:
+                    final_url = resp.geturl()
+                    content = resp.read(2_000_000)
+                    status_code = resp.status
+            except Exception as exc:
+                attempt.availability_state = "failed"
+                attempt.errors.append(f"Static homepage fetch failed: {str(exc)[:150]}")
+                return
 
         attempt.redirect_chain.append(final_url)
         sha256_hash = hashlib.sha256(content).hexdigest()
@@ -104,7 +111,15 @@ class StaticHomepageStrategy(BaseStrategy):
         name_matched = bool(clean_name and clean_name[:12] in clean_body)
         org_matched = bool(org and org in body_text)
 
-        if name_matched or org_matched:
+        # Brand token match
+        stop_tokens = {"as", "asa", "ans", "da", "ks", "norge", "norway", "group", "holding", "drift", "eiendom"}
+        distinctive_tokens = [t for t in re.findall(r"[a-z0-9æøå]+", name.lower()) if t not in stop_tokens and len(t) >= 3]
+        brand_matched = bool(distinctive_tokens and all(
+            t in body_text or (title and t in title.lower()) or (parsed.hostname and t in parsed.hostname.lower())
+            for t in distinctive_tokens
+        ))
+
+        if name_matched or org_matched or brand_matched:
             attempt.exact_identity_evidence.append({
                 "type": "exact_name_or_org_found_in_homepage",
                 "org_number": org,
