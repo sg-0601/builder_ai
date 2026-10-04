@@ -16,4 +16,6 @@ reports/*.json
 out/*.jsonl
 out/*.json
 *.log
+._*
+.DS_Store
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import gzip
 import hashlib
+import json
 import random
 import heapq
 import urllib.parse
@@ -142,29 +143,35 @@ def deterministic_financial_filer_sample(
 
 
 def iter_bulk(path: str | Path) -> Iterable[dict[str, Any]]:
-    path_obj = Path(path)
-    is_gz = path_obj.suffix == ".gz"
-    inner_suffix = Path(path_obj.stem).suffix if is_gz else path_obj.suffix
+    p = Path(path)
+    # Magic-byte detection: 0x1f 0x8b indicates gzip compression
+    try:
+        with open(p, "rb") as probe:
+            magic = probe.read(2)
+        is_gzip = (magic == b"\x1f\x8b")
+    except Exception:
+        is_gzip = str(p).endswith(".gz")
 
-    if inner_suffix == ".jsonl":
-        import json
-        opener = gzip.open if is_gz else open
-        with opener(path, "rt", encoding="utf-8") as handle:
-            for line in handle:
-                if not line.strip():
-                    continue
-                row = json.loads(line)
-                row.setdefault("raw", dict(row))
-                if len(str(row.get("organisation_number", ""))) == 9:
-                    yield row
-        return
-
-    with open(path, "rb") as f:
-        magic = f.read(2)
-    opener = gzip.open if magic == b"\x1f\x8b" else open
-    with opener(path, "rt", encoding="utf-8-sig", newline="") as handle:
+    opener = gzip.open if is_gzip else open
+    with opener(p, "rt", encoding="utf-8-sig", newline="") as handle:
         sample = handle.read(8192)
         handle.seek(0)
+        first_char = sample.lstrip()[:1]
+
+        # Case 1: JSONL formatted records (e.g. signalpost-universe.jsonl.gz)
+        if first_char == "{" or ".jsonl" in p.name:
+            for line in handle:
+                line = line.strip()
+                if not line:
+                    continue
+                row = json.loads(line)
+                if "raw" not in row:
+                    row["raw"] = dict(row)
+                if len(str(row.get("organisation_number", ""))) == 9:
+                    yield row
+            return
+
+        # Case 2: Delimited CSV records (e.g. brreg-enheter.csv)
         dialect = csv.Sniffer().sniff(sample, delimiters=";,\t")
         for row in csv.DictReader(handle, dialect=dialect):
             record = normalize_row(row)

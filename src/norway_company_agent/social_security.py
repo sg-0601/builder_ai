@@ -86,6 +86,7 @@ def verify_social_channel_security(
       - impersonation_risk: "low" | "medium" | "high" | "critical"
       - quarantine_reasons: list of fatal rejection reasons (if any)
       - audit_proof: audit trail for verification transparency
+      - security_tier: "verified_safe_and_authentic" | "quarantined_threat" | "quarantined_uncertain"
     """
     corpus_parts = [channel_or_profile_name, target_url]
     if content_samples:
